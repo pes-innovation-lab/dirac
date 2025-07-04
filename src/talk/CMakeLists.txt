@@ -10,15 +10,12 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-#Message generation
+# Message generation
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AgentState.msg"
   DEPENDENCIES geometry_msgs
 )
 
-# Export dependencies for downstream packages
 ament_export_dependencies(rosidl_default_runtime)
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} rosidl_typesupport_cpp)
-ament_export_targets(${cpp_typesupport_target})
 
 ament_package()

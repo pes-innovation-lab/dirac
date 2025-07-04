@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(talk REQUIRED)
 
+
 # define the executable
 add_executable(agent_node src/agent_node.cpp)
 ament_target_dependencies(agent_node
@@ -20,13 +21,14 @@ ament_target_dependencies(agent_node
   talk
 )
 
-# modern interface linking
-rosidl_get_typesupport_target(cpp_typesupport_target "talk" "rosidl_typesupport_cpp")
-target_link_libraries(agent_node "${cpp_typesupport_target}")
-
 install(TARGETS
   agent_node
   DESTINATION lib/${PROJECT_NAME}
 )
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
 
 ament_package()
