@@ -1,119 +1,57 @@
-version: '3.8'
+version: "3.8"
+
 services:
-  agent_state:
-    image: alpine:latest
-    container_name: shared_state
-    command: ["tail", "-f", "/dev/null"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
-
-# 10 agent containers
   agent1:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent1
-    environment:
-      - AGENT_ID=1
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent1 -p agent_x:=1 -p agent_y:=1 -p priority:=1 -p job_id:=job1 -p job_x:=18 -p job_y:=1
+    networks: [rosnet]
   agent2:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent2
-    environment:
-      - AGENT_ID=2
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent2 -p agent_x:=1 -p agent_y:=3 -p priority:=2 -p job_id:=job2 -p job_x:=18 -p job_y:=3
+    networks: [rosnet]
   agent3:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent3
-    environment:
-      - AGENT_ID=3
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent3 -p agent_x:=1 -p agent_y:=5 -p priority:=3 -p job_id:=job3 -p job_x:=18 -p job_y:=5
+    networks: [rosnet]
   agent4:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent4
-    environment:
-      - AGENT_ID=4
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent4 -p agent_x:=1 -p agent_y:=7 -p priority:=4 -p job_id:=job4 -p job_x:=18 -p job_y:=7
+    networks: [rosnet]
   agent5:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent5
-    environment:
-      - AGENT_ID=5
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent5 -p agent_x:=1 -p agent_y:=9 -p priority:=5 -p job_id:=job5 -p job_x:=18 -p job_y:=9
+    networks: [rosnet]
   agent6:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent6
-    environment:
-      - AGENT_ID=6
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent6 -p agent_x:=1 -p agent_y:=11 -p priority:=6 -p job_id:=job6 -p job_x:=18 -p job_y:=11
+    networks: [rosnet]
   agent7:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent7
-    environment:
-      - AGENT_ID=7
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent7 -p agent_x:=1 -p agent_y:=13 -p priority:=7 -p job_id:=job7 -p job_x:=18 -p job_y:=13
+    networks: [rosnet]
   agent8:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent8
-    environment:
-      - AGENT_ID=8
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent8 -p agent_x:=1 -p agent_y:=15 -p priority:=8 -p job_id:=job8 -p job_x:=18 -p job_y:=15
+    networks: [rosnet]
   agent9:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent9
-    environment:
-      - AGENT_ID=9
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent9 -p agent_x:=1 -p agent_y:=17 -p priority:=9 -p job_id:=job9 -p job_x:=18 -p job_y:=17
+    networks: [rosnet]
   agent10:
-    image: ros:humble-ros-base
+    image: ros_agent:humble
     container_name: agent10
-    environment:
-      - AGENT_ID=10
-    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
-    volumes:
-      - agent_state_data:/data
-    networks:
-      - pibt_net
-
-volumes:
-  agent_state_data:
+    command: ros2 run pp agent_node --ros-args -p agent_id:=agent10 -p agent_x:=1 -p agent_y:=19 -p priority:=10 -p job_id:=job10 -p job_x:=18 -p job_y:=19
+    networks: [rosnet]
 
 networks:
-  pibt_net:
-    driver: bridge 
+  rosnet:
+    driver: bridge
