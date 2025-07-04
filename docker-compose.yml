@@ -1,0 +1,119 @@
+version: '3.8'
+services:
+  agent_state:
+    image: alpine:latest
+    container_name: shared_state
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+
+# 10 agent containers
+  agent1:
+    image: ros:humble-ros-base
+    container_name: agent1
+    environment:
+      - AGENT_ID=1
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent2:
+    image: ros:humble-ros-base
+    container_name: agent2
+    environment:
+      - AGENT_ID=2
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent3:
+    image: ros:humble-ros-base
+    container_name: agent3
+    environment:
+      - AGENT_ID=3
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent4:
+    image: ros:humble-ros-base
+    container_name: agent4
+    environment:
+      - AGENT_ID=4
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent5:
+    image: ros:humble-ros-base
+    container_name: agent5
+    environment:
+      - AGENT_ID=5
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent6:
+    image: ros:humble-ros-base
+    container_name: agent6
+    environment:
+      - AGENT_ID=6
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent7:
+    image: ros:humble-ros-base
+    container_name: agent7
+    environment:
+      - AGENT_ID=7
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent8:
+    image: ros:humble-ros-base
+    container_name: agent8
+    environment:
+      - AGENT_ID=8
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent9:
+    image: ros:humble-ros-base
+    container_name: agent9
+    environment:
+      - AGENT_ID=9
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+  agent10:
+    image: ros:humble-ros-base
+    container_name: agent10
+    environment:
+      - AGENT_ID=10
+    command: ["/bin/bash", "-c", "source /pibt_ws/install/setup.bash && ros2 run pibt2 pibt_agent_node"]
+    volumes:
+      - agent_state_data:/data
+    networks:
+      - pibt_net
+
+volumes:
+  agent_state_data:
+
+networks:
+  pibt_net:
+    driver: bridge 

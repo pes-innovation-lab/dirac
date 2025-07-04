@@ -1,0 +1,6 @@
+Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/pibt2 -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/pibt2
+Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/pibt2 -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/pibt2
+Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake --build /home/venator/pil/dirac/pibt_ws/build/pibt2 -- -j6 -l6
+Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake --build /home/venator/pil/dirac/pibt_ws/build/pibt2 -- -j6 -l6
+Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake --install /home/venator/pil/dirac/pibt_ws/build/pibt2
+Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake --install /home/venator/pil/dirac/pibt_ws/build/pibt2

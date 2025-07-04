@@ -1,0 +1,16 @@
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.xml
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/package_run_dependencies/pibt2
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/parent_prefix_path/pibt2
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/ament_prefix_path.sh
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/ament_prefix_path.dsv
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/path.sh
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/path.dsv
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.bash
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.sh
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.zsh
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.dsv
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.dsv
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/packages/pibt2
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/cmake/pibt2Config.cmake
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/cmake/pibt2Config-version.cmake
+/home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.xml

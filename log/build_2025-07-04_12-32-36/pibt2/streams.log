@@ -1,0 +1,66 @@
+[0.011s] Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/pibt2 -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/pibt2
+[0.078s] -- The C compiler identification is GNU 11.4.0
+[0.135s] -- The CXX compiler identification is GNU 11.4.0
+[0.144s] -- Detecting C compiler ABI info
+[0.236s] -- Detecting C compiler ABI info - done
+[0.239s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.239s] -- Detecting C compile features
+[0.239s] -- Detecting C compile features - done
+[0.241s] -- Detecting CXX compiler ABI info
+[0.340s] -- Detecting CXX compiler ABI info - done
+[0.345s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.345s] -- Detecting CXX compile features
+[0.345s] -- Detecting CXX compile features - done
+[0.347s] -- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.476s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.550s] -- Found rclcpp: 16.0.12 (/opt/ros/humble/share/rclcpp/cmake)
+[0.580s] -- Found rosidl_generator_c: 3.1.6 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.584s] -- Found rosidl_adapter: 3.1.6 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.589s] -- Found rosidl_generator_cpp: 3.1.6 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.598s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.611s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.645s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.647s] -- Found rmw_fastrtps_cpp: 6.2.7 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.762s] -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[0.783s] -- Found FastRTPS: /opt/ros/humble/include  
+[0.818s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.824s] -- Looking for pthread.h
+[0.908s] -- Looking for pthread.h - found
+[0.908s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[0.993s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[0.993s] -- Found Threads: TRUE  
+[1.031s] -- Found nlohmann_json: /usr/lib/cmake/nlohmann_json/nlohmann_jsonConfig.cmake (found version "3.10.5") 
+[1.077s] -- Configuring done
+[1.083s] -- Generating done
+[1.083s] [33mCMake Warning:
+[1.083s]   Manually-specified variables were not used by the project:
+[1.083s] 
+[1.083s]     CATKIN_INSTALL_INTO_PREFIX_ROOT
+[1.083s] 
+[1.083s] [0m
+[1.085s] -- Build files have been written to: /home/venator/pil/dirac/pibt_ws/build/pibt2
+[1.091s] Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/pibt2 -DCATKIN_INSTALL_INTO_PREFIX_ROOT=0 -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/pibt2
+[1.093s] Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake --build /home/venator/pil/dirac/pibt_ws/build/pibt2 -- -j6 -l6
+[1.157s] [ 50%] [32mBuilding CXX object CMakeFiles/pibt_agent_node.dir/pibt_agent_node.cpp.o[0m
+[6.706s] [100%] [32m[1mLinking CXX executable pibt_agent_node[0m
+[6.887s] [100%] Built target pibt_agent_node
+[6.898s] Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake --build /home/venator/pil/dirac/pibt_ws/build/pibt2 -- -j6 -l6
+[6.899s] Invoking command in '/home/venator/pil/dirac/pibt_ws/build/pibt2': /usr/bin/cmake --install /home/venator/pil/dirac/pibt_ws/build/pibt2
+[6.907s] -- Install configuration: ""
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.xml
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/package_run_dependencies/pibt2
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/parent_prefix_path/pibt2
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/ament_prefix_path.sh
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/ament_prefix_path.dsv
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/path.sh
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/environment/path.dsv
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.bash
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.sh
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.zsh
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/local_setup.dsv
+[6.907s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.dsv
+[6.908s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/ament_index/resource_index/packages/pibt2
+[6.908s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/cmake/pibt2Config.cmake
+[6.908s] -- Installing: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/cmake/pibt2Config-version.cmake
+[6.908s] -- Up-to-date: /home/venator/pil/dirac/pibt_ws/install/pibt2/share/pibt2/package.xml
+[6.909s] Invoked command in '/home/venator/pil/dirac/pibt_ws/build/pibt2' returned '0': /usr/bin/cmake --install /home/venator/pil/dirac/pibt_ws/build/pibt2

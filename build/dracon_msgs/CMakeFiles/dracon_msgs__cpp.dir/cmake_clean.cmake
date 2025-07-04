@@ -1,0 +1,43 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/dracon_msgs__cpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment_table__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment_table__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment_table__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_assignment_table__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost_table__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost_table__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost_table__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_cost_table__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_list__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_list__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_list__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_list__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_status__builder.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_status__struct.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_status__traits.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/detail/job_status__type_support.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_assignment.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_assignment_table.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_cost.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_cost_table.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_list.hpp"
+  "rosidl_generator_cpp/dracon_msgs/msg/job_status.hpp"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang )
+  include(CMakeFiles/dracon_msgs__cpp.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

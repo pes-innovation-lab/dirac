@@ -1,0 +1,13 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from dracon_msgs/msg/JobList.msg
+// generated code does not contain a copyright notice
+
+#include "dracon_msgs/msg/Job.idl"
+
+module dracon_msgs {
+  module msg {
+    struct JobList {
+      sequence<dracon_msgs::msg::Job> jobs;
+    };
+  };
+};
