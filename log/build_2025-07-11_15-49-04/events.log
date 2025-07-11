@@ -1,0 +1,7 @@
+[0.000000] (-) TimerEvent: {}
+[0.000664] (-) JobUnselected: {'identifier': 'pibt2'}
+[0.000794] (-) JobUnselected: {'identifier': 'talk'}
+[0.000819] (pp) JobQueued: {'identifier': 'pp', 'dependencies': OrderedDict([('talk', '/home/venator/pil/dirac/pibt_ws/install/talk')])}
+[0.000845] (pp) JobStarted: {'identifier': 'pp'}
+[0.010671] (pp) JobEnded: {'identifier': 'pp', 'rc': 1}
+[0.021314] (-) EventReactorShutdown: {}

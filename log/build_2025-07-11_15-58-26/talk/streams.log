@@ -1,0 +1,63 @@
+[0.010s] Invoking command in '/home/venator/pil/dirac/pibt_ws/build/talk': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/talk -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/talk
+[0.100s] -- The C compiler identification is GNU 11.4.0
+[0.158s] -- The CXX compiler identification is GNU 11.4.0
+[0.166s] -- Detecting C compiler ABI info
+[0.234s] -- Detecting C compiler ABI info - done
+[0.241s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.241s] -- Detecting C compile features
+[0.241s] -- Detecting C compile features - done
+[0.244s] -- Detecting CXX compiler ABI info
+[0.318s] -- Detecting CXX compiler ABI info - done
+[0.327s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.327s] -- Detecting CXX compile features
+[0.328s] -- Detecting CXX compile features - done
+[0.332s] -- Found ament_cmake: 1.3.11 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.505s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.581s] -- Found rosidl_default_generators: 1.2.0 (/opt/ros/humble/share/rosidl_default_generators/cmake)
+[0.585s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.590s] -- Found rosidl_adapter: 3.1.6 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.628s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.658s] -- Found geometry_msgs: 4.9.0 (/opt/ros/humble/share/geometry_msgs/cmake)
+[0.860s] [31mCMake Error at /opt/ros/humble/share/rosidl_adapter/cmake/rosidl_adapt_interfaces.cmake:59 (message):
+[0.861s]   execute_process(/usr/bin/python3 -m rosidl_adapter --package-name talk
+[0.861s]   --arguments-file
+[0.861s]   /home/venator/pil/dirac/pibt_ws/build/talk/rosidl_adapter__arguments__talk.json
+[0.861s]   --output-dir /home/venator/pil/dirac/pibt_ws/build/talk/rosidl_adapter/talk
+[0.861s]   --output-file
+[0.861s]   /home/venator/pil/dirac/pibt_ws/build/talk/rosidl_adapter/talk.idls)
+[0.861s]   returned error code 1:
+[0.861s] 
+[0.861s]   Error processing 'AgentState AgentStateTable[]' of 'talk/AgentStateTable':
+[0.861s]   ''AgentStateTable[]' is an invalid field name.  It should have the pattern
+[0.861s]   '^(?!.*__)(?!.*_$)[a-z][a-z0-9_]*$''
+[0.861s] 
+[0.861s]   Traceback (most recent call last):
+[0.861s] 
+[0.861s]     File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+[0.862s]       return _run_code(code, main_globals, None,
+[0.862s]     File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+[0.862s]       exec(code, run_globals)
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/__main__.py", line 19, in <module>
+[0.862s]       sys.exit(main())
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/main.py", line 53, in main
+[0.862s]       abs_idl_file = convert_to_idl(
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/__init__.py", line 19, in convert_to_idl
+[0.862s]       return convert_msg_to_idl(
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/msg/__init__.py", line 28, in convert_msg_to_idl
+[0.862s]       msg = parse_message_string(package_name, input_file.stem, content)
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/parser.py", line 519, in parse_message_string
+[0.862s]       fields.append(Field(
+[0.862s]     File "/opt/ros/humble/local/lib/python3.10/dist-packages/rosidl_adapter/parser.py", line 354, in __init__
+[0.862s]       raise NameError(
+[0.862s] 
+[0.862s]   NameError: 'AgentStateTable[]' is an invalid field name.  It should have
+[0.862s]   the pattern '^(?!.*__)(?!.*_$)[a-z][a-z0-9_]*$'
+[0.862s] 
+[0.863s] Call Stack (most recent call first):
+[0.863s]   /opt/ros/humble/share/rosidl_cmake/cmake/rosidl_generate_interfaces.cmake:130 (rosidl_adapt_interfaces)
+[0.863s]   CMakeLists.txt:14 (rosidl_generate_interfaces)
+[0.863s] 
+[0.863s] [0m
+[0.863s] -- Configuring incomplete, errors occurred!
+[0.863s] See also "/home/venator/pil/dirac/pibt_ws/build/talk/CMakeFiles/CMakeOutput.log".
+[0.868s] Invoked command in '/home/venator/pil/dirac/pibt_ws/build/talk' returned '1': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/talk -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/talk

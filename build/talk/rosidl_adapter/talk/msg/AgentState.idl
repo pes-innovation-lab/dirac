@@ -1,0 +1,27 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from talk/msg/AgentState.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Point.idl"
+
+module talk {
+  module msg {
+    struct AgentState {
+      string agent_id;
+
+      double x;
+
+      double y;
+
+      int32 priority;
+
+      string job_id;
+
+      double job_x;
+
+      double job_y;
+
+      sequence<geometry_msgs::msg::Point> next_steps;
+    };
+  };
+};

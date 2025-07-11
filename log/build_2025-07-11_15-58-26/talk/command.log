@@ -1,0 +1,2 @@
+Invoking command in '/home/venator/pil/dirac/pibt_ws/build/talk': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/talk -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/talk
+Invoked command in '/home/venator/pil/dirac/pibt_ws/build/talk' returned '1': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/venator/pil/dirac/pibt_ws/src/talk -DCMAKE_INSTALL_PREFIX=/home/venator/pil/dirac/pibt_ws/install/talk
