@@ -1,7 +1,0 @@
-{
-  "package_name": "talk",
-  "non_idl_tuples": [
-    "/home/venator/pil/dirac/pibt_ws/src/talk:msg/AgentState.msg",
-    "/home/venator/pil/dirac/pibt_ws/src/talk:msg/AgentStateTable.msg"
-  ]
-}

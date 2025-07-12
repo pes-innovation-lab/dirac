@@ -227,7 +227,13 @@ private:
         }
         return result;
     }
-
+   /* bool isValid (int timestep){
+        if (timestep< 0 || timestep >= static_cast<int>(agent_path_.size())) {
+            RCLCPP_ERROR(get_logger(), "Invalid timestep: %d", timestep);
+            return false;
+        }
+        if ()
+    }*/
     agent agent_;
     int agent_id_;
     int timestep_;
