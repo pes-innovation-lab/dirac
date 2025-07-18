@@ -1,2 +1,3 @@
-int agent_id
-float32 distance 
+int32 agent_id
+float64 distance
+bool re_election 
