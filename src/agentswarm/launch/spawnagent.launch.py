@@ -3,11 +3,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
 
-    # A list to hold all the node actions we create
     spawn_nodes = []
 
-    # A list of dictionaries, where each dictionary represents an agent to spawn
-    # 'id' must be unique for each agent
     agents_to_spawn = [
         {'id': 1, 'x': 5.0,  'y': 5.0},
         {'id': 2, 'x': 15.0, 'y': 2.0},   
@@ -51,9 +48,7 @@ def generate_launch_description():
         {'id': 40, 'x': 25.0, 'y': 22.0},
     ]
 
-    # Loop through the list of agents
     for agent in agents_to_spawn:
-        # Create a Node action for each agent
         node = Node(
             package='agentswarm',
             executable='agent_node',
@@ -68,5 +63,4 @@ def generate_launch_description():
         )
         spawn_nodes.append(node)
 
-    # Return a LaunchDescription object with all the nodes to be launched
     return LaunchDescription(spawn_nodes)
