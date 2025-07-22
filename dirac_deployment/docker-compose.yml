@@ -19,7 +19,7 @@ services:
       bash -c "
       source /opt/ros/humble/setup.bash &&
       source /ros2_ws/install/setup.bash &&
-      ros2 launch dirac_bringup dirac_agent_bringup.launch.py agent_id:=\$$AGENT_ID"
+      ros2 launch dirac_bringup dirac_bringup.launch.py agent_id:=\$$AGENT_ID"
     networks:
       - ros_network
 
