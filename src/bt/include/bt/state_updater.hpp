@@ -14,11 +14,26 @@ namespace bt {
 
 class StateUpdater {
 public:
-    StateUpdater(rclcpp::Node* node, int agent_id, std::shared_ptr<AgentStateDB> db, int total_agents)
-    : node_(node), agent_id_(agent_id), db_(db), total_agents_(total_agents) {
+    StateUpdater(rclcpp::Node* node, int agent_id, std::shared_ptr<AgentStateDB> db, int total_agents, const std::string& agents_csv_path)
+    : node_(node), agent_id_(agent_id), db_(db), total_agents_(total_agents), current_global_tick_(0) {
         // Get all agent IDs from CSV using FileIO
-        all_agent_ids_ = bt::FileIO::get_all_agent_ids("../agents.csv");
+        all_agent_ids_ = bt::FileIO::get_all_agent_ids(agents_csv_path);
+        
+        RCLCPP_INFO(node_->get_logger(), "StateUpdater loaded %zu agent IDs from CSV", all_agent_ids_.size());
+        for (int id : all_agent_ids_) {
+            RCLCPP_INFO(node_->get_logger(), "  - Agent ID: %d", id);
+        }
+        
+        // Check if this agent is the leader based on agent state
+        is_leader_ = db_->getState(agent_id_).is_leader;
+        
+        RCLCPP_INFO(node_->get_logger(), "StateUpdater initialized for Agent %d (Leader: %s)", 
+                    agent_id_, is_leader_ ? "YES" : "NO");
+        
         db_update_pub_ = node_->create_publisher<std_msgs::msg::String>("db_update", 10);
+        state_ack_pub_ = node_->create_publisher<std_msgs::msg::String>("state_ack", 10);
+        global_tick_pub_ = node_->create_publisher<std_msgs::msg::String>("global_tick", 10);
+        
         db_update_sub_ = node_->create_subscription<std_msgs::msg::String>(
             "db_update", 10,
             [this](const std_msgs::msg::String::SharedPtr msg) {
@@ -102,27 +117,124 @@ public:
                 // Track received agent IDs for this tick
                 int tick = state.current_tick;
                 received_agents_by_tick_[tick].insert(state.agent_id);
-                db_->setState(state.agent_id, state);
-                // If all agent IDs have been received for this tick, publish own state
-                if (received_agents_by_tick_[tick].size() == all_agent_ids_.size() && !own_state_written_for_tick_[tick]) {
-                    maybe_write_own_state(tick);
+                
+                // Only update state if it's not our own agent (preserve local agent's leadership)
+                if (state.agent_id != agent_id_) {
+                    db_->setState(state.agent_id, state);
+                } else {
+                    // For our own agent, preserve leadership
+                    db_->setStatePreserveLeadership(agent_id_, state);
+                }
+                
+                RCLCPP_DEBUG(node_->get_logger(), "Agent %d received state update from agent %d for tick %d", 
+                            agent_id_, state.agent_id, tick);
+                
+                // Check if we should send ack now that we've received this state
+                check_and_send_ack_if_ready(tick);
+            }
+        );
+
+        // Subscribe to state acknowledgments (leader only)
+        if (is_leader_) {
+            RCLCPP_INFO(node_->get_logger(), "Agent %d is LEADER - subscribing to state acknowledgments", agent_id_);
+            state_ack_sub_ = node_->create_subscription<std_msgs::msg::String>(
+                "state_ack", 10,
+                [this](const std_msgs::msg::String::SharedPtr msg) {
+                    // Parse: "agent_id,tick"
+                    std::stringstream ss(msg->data);
+                    std::string token;
+                    std::getline(ss, token, ',');
+                    int ack_agent_id = std::stoi(token);
+                    std::getline(ss, token, ',');
+                    int ack_tick = std::stoi(token);
+                    
+                    // Only process acks for the current tick - ignore old acks
+                    if (ack_tick == current_global_tick_) {
+                        acks_by_tick_[ack_tick].insert(ack_agent_id);
+                        
+                        RCLCPP_DEBUG(node_->get_logger(), "Leader received ack from agent %d for current tick %d (%zu/%zu)", 
+                                    ack_agent_id, ack_tick, acks_by_tick_[ack_tick].size(), all_agent_ids_.size());
+                        
+                        // Only advance when all agents have acknowledged the current tick
+                        if (acks_by_tick_[ack_tick].size() == all_agent_ids_.size()) {
+                            RCLCPP_INFO(node_->get_logger(), "Leader: All %zu agents acknowledged current tick %d, advancing global tick", 
+                                       all_agent_ids_.size(), ack_tick);
+                            
+                            // Clear old tick data to prevent memory buildup
+                            acks_by_tick_.erase(ack_tick);
+                            received_agents_by_tick_.erase(ack_tick);
+                            
+                            advance_global_tick();
+                        }
+                    } else {
+                        RCLCPP_DEBUG(node_->get_logger(), "Leader ignoring ack from agent %d for old tick %d (current: %d)", 
+                                    ack_agent_id, ack_tick, current_global_tick_);
+                    }
+                }
+            );
+        }
+
+        // Subscribe to global tick updates
+        global_tick_sub_ = node_->create_subscription<std_msgs::msg::String>(
+            "global_tick", 10,
+            [this](const std_msgs::msg::String::SharedPtr msg) {
+                int new_tick = std::stoi(msg->data);
+                if (new_tick > current_global_tick_) {
+                    current_global_tick_ = new_tick;
+                    // Notify agent of tick change
+                    if (tick_change_callback_) {
+                        tick_change_callback_(current_global_tick_);
+                    }
                 }
             }
         );
     }
 
+    void set_tick_change_callback(std::function<void(int)> callback) {
+        tick_change_callback_ = callback;
+    }
+
+    void send_state_ack(int tick) {
+        std_msgs::msg::String msg;
+        msg.data = std::to_string(agent_id_) + "," + std::to_string(tick);
+        state_ack_pub_->publish(msg);
+        RCLCPP_DEBUG(node_->get_logger(), "Agent %d sent acknowledgment for tick %d", agent_id_, tick);
+    }
+
+    int get_current_global_tick() const {
+        return current_global_tick_;
+    }
+    
+    void publish_state_for_tick(int tick) {
+        // First, immediately publish our own state (write first)
+        if (!own_state_written_for_tick_[tick]) {
+            maybe_write_own_state_immediately(tick);
+        }
+        
+        // Then check if we should send ack (after all reads are complete)
+        check_and_send_ack_if_ready(tick);
+    }
+
 private:
-    rclcpp::Node* node_;
-    int agent_id_;
-    std::shared_ptr<AgentStateDB> db_;
-    int total_agents_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr db_update_pub_;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr db_update_sub_;
-    std::set<int> all_agent_ids_;
-    std::unordered_map<int, std::set<int>> received_agents_by_tick_;
-    std::unordered_map<int, bool> own_state_written_for_tick_;
+    void advance_global_tick() {
+        current_global_tick_++;
+        std_msgs::msg::String msg;
+        msg.data = std::to_string(current_global_tick_);
+        global_tick_pub_->publish(msg);
+        RCLCPP_INFO(node_->get_logger(), "Leader agent %d advanced global tick to %d", agent_id_, current_global_tick_);
+    }
 
     void maybe_write_own_state(int tick) {
+        // This is the old method - now split into immediate write + conditional ack
+        maybe_write_own_state_immediately(tick);
+        check_and_send_ack_if_ready(tick);
+    }
+    
+    void maybe_write_own_state_immediately(int tick) {
+        if (own_state_written_for_tick_[tick]) {
+            return; // Already written for this tick
+        }
+        
         std_msgs::msg::String msg;
         std::stringstream ss;
         // Write own agent state to CSV format
@@ -153,7 +265,41 @@ private:
         msg.data = ss.str();
         db_update_pub_->publish(msg);
         own_state_written_for_tick_[tick] = true;
+        
+        RCLCPP_INFO(node_->get_logger(), "Agent %d published state for tick %d", agent_id_, tick);
+        
+        // Mark that we've "received" our own state for this tick
+        received_agents_by_tick_[tick].insert(agent_id_);
     }
+    
+    void check_and_send_ack_if_ready(int tick) {
+        // Send ack only when we've written our state AND received all other states
+        if (own_state_written_for_tick_[tick] && received_agents_by_tick_[tick].size() == all_agent_ids_.size()) {
+            send_state_ack(tick);
+        }
+    }
+
+    rclcpp::Node* node_;
+    int agent_id_;
+    std::shared_ptr<AgentStateDB> db_;
+    int total_agents_;
+    bool is_leader_;
+    int current_global_tick_;
+    
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr db_update_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_ack_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr global_tick_pub_;
+    
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr db_update_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr state_ack_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr global_tick_sub_;
+    
+    std::set<int> all_agent_ids_;
+    std::unordered_map<int, std::set<int>> received_agents_by_tick_;
+    std::unordered_map<int, std::set<int>> acks_by_tick_;
+    std::unordered_map<int, bool> own_state_written_for_tick_;
+    
+    std::function<void(int)> tick_change_callback_;
 };
 
-}
+} // namespace bt

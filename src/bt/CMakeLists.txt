@@ -9,8 +9,9 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
-add_executable(agent src/agent.cpp)
+add_executable(agent src/agent.cpp src/path_planner.cpp)
 target_include_directories(agent PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -19,10 +20,24 @@ ament_target_dependencies(
   agent
   "rclcpp"
   "std_msgs"
+  "ament_index_cpp"
 )
 
-install(TARGETS agent
-  DESTINATION lib/${PROJECT_NAME})
+install(TARGETS
+  agent
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  FILES
+  ../../agents.csv
+  ../../map.csv
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install launch files
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch/)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
