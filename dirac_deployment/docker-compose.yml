@@ -2,11 +2,13 @@ version: '3.8'
 
 services:
   dirac_agent:
-    container_name: dirac_${AGENT_ID:-1}
+    container_name: dirac-${AGENT_ID:-1}
+    hostname: dirac-${AGENT_ID:-1}
     build:
       context: ..
       dockerfile: dirac_deployment/Dockerfile
     image: dirac-ros2:latest
+    user: dirac
     stdin_open: true
     tty: true
     environment:
@@ -16,10 +18,10 @@ services:
       - TURTLESIM=${TURTLESIM:-false}
       - NUM_TURTLES=${NUM_TURTLES:-0}
       - QT_X11_NO_MITSHM=1
-      - XAUTHORITY=${XAUTH:-$HOME/.Xauthority}
+      - XAUTHORITY=${XAUTH:-/home/dirac/.Xauthority}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${XAUTH:-$HOME/.Xauthority}:/root/.Xauthority:rw
+      - ${XAUTH:-$HOME/.Xauthority}:/home/dirac/.Xauthority:rw
     command: >
       bash -c "
       echo \"Container starting with Agent ID: \$$AGENT_ID, TURTLESIM: \$$TURTLESIM, NUM_TURTLES: \$$NUM_TURTLES\";

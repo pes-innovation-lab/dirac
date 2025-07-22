@@ -12,7 +12,14 @@ RUN apt-get update && apt-get install -y \
     python3-vcstool \
     git \
     ros-humble-turtlesim \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
+
+# Create dirac user with root-level access
+RUN useradd -m -s /bin/bash dirac && \
+    echo "dirac:dirac" | chpasswd && \
+    usermod -aG sudo dirac && \
+    echo "dirac ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Create a workspace
 WORKDIR /ros2_ws
@@ -31,9 +38,19 @@ RUN cd /ros2_ws && \
 RUN cd /ros2_ws && \
     /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build"
 
-# Source the workspace setup in bashrc for interactive use
+# Set ownership of the workspace to dirac user
+RUN chown -R dirac:dirac /ros2_ws
+
+# Source the workspace setup in bashrc for both root and dirac user
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
-    echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc
+    echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> /home/dirac/.bashrc && \
+    echo "source /ros2_ws/install/setup.bash" >> /home/dirac/.bashrc
 
 # Set the default command
 CMD ["/bin/bash"]
+
+# Switch to dirac user and set working directory
+USER dirac
+WORKDIR /home/dirac
+
