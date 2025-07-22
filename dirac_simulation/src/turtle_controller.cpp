@@ -104,76 +104,84 @@ private:
 
     void move_left(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
     {
-        // Step 1: Turn left 90 degrees
-        turn_turtle(publisher, angular_speed_, [this, publisher, agent_id]() {
-            // Step 2: Move forward 1 unit
-            move_forward_then_turn_right(publisher, agent_id);
+        //Turn left 90 degrees
+        auto twist_msg = geometry_msgs::msg::Twist();
+        twist_msg.linear.x = 0.0;
+        twist_msg.angular.z = angular_speed_;
+        publisher->publish(twist_msg);
+        
+        auto turn_duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / angular_speed_) * 1000));
+        
+        auto timer1 = this->create_wall_timer(turn_duration, [this, publisher, agent_id]() {
+            //Move forward 1 unit
+            auto twist_msg = geometry_msgs::msg::Twist();
+            twist_msg.linear.x = linear_speed_;
+            twist_msg.angular.z = 0.0;
+            publisher->publish(twist_msg);
+            
+            auto move_duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
+            
+            auto timer2 = this->create_wall_timer(move_duration, [this, publisher, agent_id]() {
+                //Turn right 90 degrees
+                auto twist_msg = geometry_msgs::msg::Twist();
+                twist_msg.linear.x = 0.0;
+                twist_msg.angular.z = -angular_speed_;
+                publisher->publish(twist_msg);
+                
+                auto final_turn_duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / angular_speed_) * 1000));
+                
+                auto timer3 = this->create_wall_timer(final_turn_duration, [this, publisher, agent_id]() {
+                    stop_turtle(publisher, agent_id);
+                });
+                
+                timers_[agent_id] = timer3;
+            });
+        
+            timers_[agent_id] = timer2;
         });
+        
+        timers_[agent_id] = timer1;
     }
 
     void move_right(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
     {
-        // Step 1: Turn right 90 degrees
-        turn_turtle(publisher, -angular_speed_, [this, publisher, agent_id]() {
-            // Step 2: Move forward 1 unit
-            move_forward_then_turn_left(publisher, agent_id);
-        });
-    }
-
-    void move_forward_then_turn_right(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
-    {
-        auto twist_msg = geometry_msgs::msg::Twist();
-        twist_msg.linear.x = linear_speed_;
-        twist_msg.angular.z = 0.0;
-        
-        publisher->publish(twist_msg);
-        
-        auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-        
-        auto timer = this->create_wall_timer(duration, [this, publisher, agent_id]() {
-            // Step 3: Turn right 90 degrees to reset orientation
-            turn_turtle(publisher, -angular_speed_, [this, publisher, agent_id]() {
-                stop_turtle(publisher, agent_id);
-            });
-        });
-        
-        timers_[agent_id] = timer;
-    }
-
-    void move_forward_then_turn_left(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
-    {
-        auto twist_msg = geometry_msgs::msg::Twist();
-        twist_msg.linear.x = linear_speed_;
-        twist_msg.angular.z = 0.0;
-        
-        publisher->publish(twist_msg);
-        
-        auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-        
-        auto timer = this->create_wall_timer(duration, [this, publisher, agent_id]() {
-            // Step 3: Turn left 90 degrees to reset orientation
-            turn_turtle(publisher, angular_speed_, [this, publisher, agent_id]() {
-                stop_turtle(publisher, agent_id);
-            });
-        });
-        
-        timers_[agent_id] = timer;
-    }
-
-    void turn_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, 
-                     double angular_vel, std::function<void()> callback)
-    {
+        //Turn right 90 degrees
         auto twist_msg = geometry_msgs::msg::Twist();
         twist_msg.linear.x = 0.0;
-        twist_msg.angular.z = angular_vel;
-        
+        twist_msg.angular.z = -angular_speed_;
         publisher->publish(twist_msg);
         
-        // Calculate duration to turn exactly 90 degrees
-        auto duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / std::abs(angular_vel)) * 1000));
+        auto turn_duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / angular_speed_) * 1000));
         
-        auto timer = this->create_wall_timer(duration, callback);
-        // Note: We don't store this timer in the map since it's temporary for the sequence
+        auto timer1 = this->create_wall_timer(turn_duration, [this, publisher, agent_id]() {
+            //Move forward 1 unit
+            auto twist_msg = geometry_msgs::msg::Twist();
+            twist_msg.linear.x = linear_speed_;
+            twist_msg.angular.z = 0.0;
+            publisher->publish(twist_msg);
+            
+            auto move_duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
+            
+            auto timer2 = this->create_wall_timer(move_duration, [this, publisher, agent_id]() {
+                //Turn left 90 degrees  
+                auto twist_msg = geometry_msgs::msg::Twist();
+                twist_msg.linear.x = 0.0;
+                twist_msg.angular.z = angular_speed_;
+                publisher->publish(twist_msg);
+                
+                auto final_turn_duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / angular_speed_) * 1000));
+                
+                auto timer3 = this->create_wall_timer(final_turn_duration, [this, publisher, agent_id]() {
+                    stop_turtle(publisher, agent_id);
+                });
+                
+                timers_[agent_id] = timer3;
+            });
+            
+            timers_[agent_id] = timer2;
+        });
+        
+        timers_[agent_id] = timer1;
     }
 
     void stop_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
