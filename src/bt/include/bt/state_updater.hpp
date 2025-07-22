@@ -7,6 +7,8 @@
 #include <sstream>
 #include "bt/agent_state_db.hpp"
 #include "bt/agent_state.hpp"
+#include "bt/file_io.hpp"
+#include <set>
 
 namespace bt {
 
@@ -14,6 +16,8 @@ class StateUpdater {
 public:
     StateUpdater(rclcpp::Node* node, int agent_id, std::shared_ptr<AgentStateDB> db, int total_agents)
     : node_(node), agent_id_(agent_id), db_(db), total_agents_(total_agents) {
+        // Get all agent IDs from CSV using FileIO
+        all_agent_ids_ = bt::FileIO::get_all_agent_ids("../agents.csv");
         db_update_pub_ = node_->create_publisher<std_msgs::msg::String>("db_update", 10);
         db_update_sub_ = node_->create_subscription<std_msgs::msg::String>(
             "db_update", 10,
@@ -95,91 +99,61 @@ public:
                 } else {
                     state.timestamp = std::chrono::system_clock::now();
                 }
-                // Only allow one update per agent per tick
-                int agent_id = state.agent_id;
+                // Track received agent IDs for this tick
                 int tick = state.current_tick;
-                auto& last_tick = last_tick_by_agent_[agent_id];
-                if (last_tick != tick) {
-                    db_->setState(agent_id, state);
-                    last_tick = tick;
-                    // --- New logic for peer update collection ---
-                    if (tick != current_tick_) {
-                        // New tick: reset peer set and start timer
-                        current_tick_ = tick;
-                        peer_updates_.clear();
-                        if (timer_) timer_->cancel();
-                        timer_ = node_->create_wall_timer(std::chrono::milliseconds(200), [this, tick]() {
-                            this->maybe_write_own_state(tick);
-                        });
-                    }
-                    if (agent_id != agent_id_) {
-                        peer_updates_.insert(agent_id);
-                    }
-                    // Check if 95% of (n-1) peers have updated
-                    int peer_count = total_agents_ - 1;
-                    int threshold = static_cast<int>(0.95 * peer_count);
-                    if (static_cast<int>(peer_updates_.size()) >= threshold && !own_state_written_for_tick_[tick]) {
-                        if (timer_) timer_->cancel();
-                        maybe_write_own_state(tick);
-                    }
-                    RCLCPP_INFO(node_->get_logger(), "DB updated for agent %d at tick %d", agent_id, tick);
-                } else {
-                    RCLCPP_DEBUG(node_->get_logger(), "Duplicate update for agent %d at tick %d ignored", agent_id, tick);
+                received_agents_by_tick_[tick].insert(state.agent_id);
+                db_->setState(state.agent_id, state);
+                // If all agent IDs have been received for this tick, publish own state
+                if (received_agents_by_tick_[tick].size() == all_agent_ids_.size() && !own_state_written_for_tick_[tick]) {
+                    maybe_write_own_state(tick);
                 }
             }
         );
     }
 
 private:
-    void maybe_write_own_state(int tick) {
-        if (!own_state_written_for_tick_[tick]) {
-            own_state_written_for_tick_[tick] = true;
-            // Serialize this agent's state for this tick
-            AgentState state = db_->getState(agent_id_);
-            std_msgs::msg::String msg;
-            msg.data = agent_state_to_csv(state);
-            db_update_pub_->publish(msg);
-            RCLCPP_INFO(node_->get_logger(), "Agent %d writing own state for tick %d (peer updates: %zu)", agent_id_, tick, peer_updates_.size());
-        }
-    }
-    std::string agent_state_to_csv(const AgentState& state) {
-        std::ostringstream oss;
-        oss << state.agent_id << ','
-            << state.current_x << ','
-            << state.current_y << ','
-            << state.priority << ','
-            << state.job_id << ','
-            << state.goal_x << ','
-            << state.goal_y << ','
-            << (state.is_moving ? "1" : "0") << ','
-            << (state.is_leader ? "1" : "0") << ','
-            << state.current_tick << ',';
-        // next_moves as semicolon-separated x:y pairs
-        for (size_t i = 0; i < state.next_moves.size(); ++i) {
-            oss << state.next_moves[i].first << ':' << state.next_moves[i].second;
-            if (i + 1 < state.next_moves.size()) oss << ';';
-        }
-        oss << ',' << (state.goal_reached ? "1" : "0") << ',';
-        oss << state.force.first << ':' << state.force.second << ',';
-        oss << state.chain_force.first << ':' << state.chain_force.second << ',';
-        oss << state.stuck_counter << ',';
-        oss << state.force_multiplier << ',';
-        // timestamp as ms since epoch
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(state.timestamp.time_since_epoch()).count();
-        oss << ms;
-        return oss.str();
-    }
     rclcpp::Node* node_;
     int agent_id_;
     std::shared_ptr<AgentStateDB> db_;
     int total_agents_;
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr db_update_sub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr db_update_pub_;
-    std::unordered_map<int, int> last_tick_by_agent_;
-    int current_tick_ = -1;
-    std::set<int> peer_updates_;
-    rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr db_update_sub_;
+    std::set<int> all_agent_ids_;
+    std::unordered_map<int, std::set<int>> received_agents_by_tick_;
     std::unordered_map<int, bool> own_state_written_for_tick_;
+
+    void maybe_write_own_state(int tick) {
+        std_msgs::msg::String msg;
+        std::stringstream ss;
+        // Write own agent state to CSV format
+        ss << agent_id_ << ','
+           << db_->getState(agent_id_).current_x << ','
+           << db_->getState(agent_id_).current_y << ','
+           << db_->getState(agent_id_).priority << ','
+           << db_->getState(agent_id_).job_id << ','
+           << db_->getState(agent_id_).goal_x << ','
+           << db_->getState(agent_id_).goal_y << ','
+           << (db_->getState(agent_id_).is_moving ? "true" : "false") << ','
+           << (db_->getState(agent_id_).is_leader ? "true" : "false") << ','
+           << tick << ',';
+        const auto& next_moves = db_->getState(agent_id_).next_moves;
+        for (size_t i = 0; i < next_moves.size(); ++i) {
+            ss << next_moves[i].first << ':' << next_moves[i].second;
+            if (i < next_moves.size() - 1) {
+                ss << ';';
+            }
+        }
+        ss << ','
+           << (db_->getState(agent_id_).goal_reached ? "true" : "false") << ','
+           << db_->getState(agent_id_).force.first << ':' << db_->getState(agent_id_).force.second << ','
+           << db_->getState(agent_id_).chain_force.first << ':' << db_->getState(agent_id_).chain_force.second << ','
+           << db_->getState(agent_id_).stuck_counter << ','
+           << db_->getState(agent_id_).force_multiplier << ','
+           << std::chrono::duration_cast<std::chrono::milliseconds>(db_->getState(agent_id_).timestamp.time_since_epoch()).count();
+        msg.data = ss.str();
+        db_update_pub_->publish(msg);
+        own_state_written_for_tick_[tick] = true;
+    }
 };
 
-} // namespace bt
+}
