@@ -76,11 +76,23 @@ elif [[ "$UP_FLAG" == true ]]; then
     echo "Starting Dirac system with Docker Compose..."
     echo "Number of agents to start: $NUM_AGENTS"
     
+    # Set up X11 forwarding for GUI applications
+    xhost +local:docker 2>/dev/null || true
+    
     # Start agents using individual docker compose commands
     echo "Starting agents..."
     for (( i=1; i<=NUM_AGENTS; i++ )); do
         echo "Starting agent $i..."
         export AGENT_ID=$i
+        export TURTLESIM=false
+        export NUM_TURTLES=0
         docker compose up --build 
     done
+    
+    # Start turtlesim simulation after all agents
+    echo "Starting turtlesim simulation..."
+    export AGENT_ID=turtlesim
+    export TURTLESIM=true
+    export NUM_TURTLES=$NUM_AGENTS
+    docker compose up --build
 fi
