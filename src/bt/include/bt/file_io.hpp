@@ -11,37 +11,34 @@ namespace bt {
 
 class FileIO {
 public:
-    // Reads agents.csv and returns a vector of AgentState (with only fields from CSV filled)
-    static std::vector<AgentState> read_agents_csv(const std::string& filename) {
-        std::vector<AgentState> agents;
+    // Given filename and agent_id, returns ((start_x, start_y), job_id, (goal_x, goal_y)) for that agent
+    static std::tuple<std::pair<int, int>, std::string, std::pair<int, int>>
+    get_agent_info(const std::string& filename, int agent_id) {
         std::ifstream file(filename);
         if (!file.is_open()) {
             std::cerr << "Failed to open agents file: " << filename << std::endl;
-            return agents;
+            return {{-1, -1}, "", {-1, -1}};
         }
         std::string line;
         std::getline(file, line); // skip header
         while (std::getline(file, line)) {
             std::stringstream ss(line);
-            AgentState agent;
             std::string token;
-            std::getline(ss, token, ','); agent.agent_id = std::stoi(token);
-            std::getline(ss, token, ','); agent.current_x = std::stoi(token);
-            std::getline(ss, token, ','); agent.current_y = std::stoi(token);
-            std::getline(ss, token, ','); agent.priority = std::stoi(token);
-            std::getline(ss, token, ','); agent.job_id = token;
-            std::getline(ss, token, ','); agent.goal_x = std::stoi(token);
-            std::getline(ss, token, ','); agent.goal_y = std::stoi(token);
-            agent.current_tick = 0;
-            agent.goal_reached = false;
-            agent.force = {0.0, 0.0};
-            agent.chain_force = {0.0, 0.0};
-            agent.stuck_counter = 0;
-            agent.force_multiplier = static_cast<double>(agent.priority);
-            agent.timestamp = std::chrono::system_clock::now();
-            agents.push_back(agent);
+            int id;
+            std::getline(ss, token, ','); id = std::stoi(token);
+            if (id == agent_id) {
+                int start_x, start_y, priority, goal_x, goal_y;
+                std::string job_id;
+                std::getline(ss, token, ','); start_x = std::stoi(token);
+                std::getline(ss, token, ','); start_y = std::stoi(token);
+                std::getline(ss, token, ','); priority = std::stoi(token); // skip
+                std::getline(ss, token, ','); job_id = token;
+                std::getline(ss, token, ','); goal_x = std::stoi(token);
+                std::getline(ss, token, ','); goal_y = std::stoi(token);
+                return {{start_x, start_y}, job_id, {goal_x, goal_y}};
+            }
         }
-        return agents;
+        return {{-1, -1}, "", {-1, -1}}; // not found
     }
 
     // Reads map.csv and returns a 2D vector of ints

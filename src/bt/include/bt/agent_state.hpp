@@ -13,7 +13,7 @@ struct AgentState {
     bool is_moving;
     bool is_leader;
     int current_tick;
-    std::vector<std::pair<int, int>> next_moves; 
+    std::vector<std::pair<int, int>> next_moves;
     bool goal_reached;
     std::pair<double, double> force;
     std::pair<double, double> chain_force; 
