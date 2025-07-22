@@ -52,14 +52,6 @@ def generate_launch_description():
         output='screen'
     )
     
-    # Start turtle controller
-    turtle_controller_node = Node(
-        package='dirac_simulation',
-        executable='turtle_controller',
-        name='turtle_controller',
-        output='screen'
-    )
-    
     # Create launch description
     ld = LaunchDescription()
     
@@ -68,12 +60,6 @@ def generate_launch_description():
     
     # Add turtlesim node
     ld.add_action(turtlesim_node)
-    
-    # Add turtle controller (with delay to ensure turtlesim is ready)
-    ld.add_action(TimerAction(
-        period=2.0,
-        actions=[turtle_controller_node]
-    ))
     
     # Log info about the number of turtles
     ld.add_action(LogInfo(

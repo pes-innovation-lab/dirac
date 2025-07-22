@@ -3,7 +3,7 @@
 from launch import LaunchDescription
 from launch.actions import LogInfo, DeclareLaunchArgument, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
-from launch.conditions import IfCondition, UnlessCondition
+from launch.conditions import IfCondition, UnlessCondition, LaunchConfigurationEquals, LaunchConfigurationNotEquals
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 import os
@@ -46,6 +46,15 @@ def generate_launch_description():
         condition=UnlessCondition(turtlesim)
     )
     
+        # Navigation controller startup (when turtlesim=false)
+    navigation_controller_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            FindPackageShare('dirac_navigation'), 
+            '/launch/navigation_controller.launch.py'
+        ]),
+        condition=UnlessCondition(turtlesim)
+    )
+    
     # Turtlesim simulation startup (when turtlesim=true)
     turtlesim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -61,5 +70,6 @@ def generate_launch_description():
         turtlesim_arg,
         num_turtles_arg,
         normal_agent,
+        navigation_controller_launch,
         turtlesim_launch
     ])

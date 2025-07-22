@@ -1,0 +1,16 @@
+discrete_navigation_controller:
+  ros__parameters:
+    navigation:
+      # Enable/disable the agent controller node
+      enable_controller: true
+      
+      # Movement parameters
+      linear_speed: 2.0      # Linear velocity (m/s)
+      angular_speed: 1.57    # Angular velocity (rad/s) - π/2 for 90° turns
+      move_distance: 1.0     # Distance to move in each command (units)
+      
+      # Topic configuration
+      cmd_vel_topic: "cmd_vel"  # Base topic name for command velocity
+      
+    # Simulation mode: true for turtlesim (/turtle{id}/cmd_vel), false for real robots (/robot{id}/cmd_vel)
+    simulation_mode: true

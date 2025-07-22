@@ -7,6 +7,8 @@ services:
     build:
       context: ..
       dockerfile: dirac_deployment/Dockerfile
+      cache_from:
+        - dirac-ros2:latest
     image: dirac-ros2:latest
     user: dirac
     stdin_open: true
@@ -33,4 +35,5 @@ services:
 
 networks:
   ros_network:
-    driver: bridge
+    external: true
+    name: dirac_ros_network
