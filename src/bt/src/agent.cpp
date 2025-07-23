@@ -102,48 +102,61 @@ private:
     void on_tick_change(int new_tick) {
         if (new_tick > current_tick_) {
             current_tick_ = new_tick;
-            RCLCPP_INFO(this->get_logger(), "Agent %d received tick change to %d", agent_id_, current_tick_);
             process_tick(current_tick_);
         }
     }
 
     void process_tick(int tick) {
-        RCLCPP_INFO(this->get_logger(), "Agent %d starting processing for tick %d", agent_id_, tick);
-        
         // Add delay to slow down tick processing for observation
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         
         AgentState current_state = db_->getState(agent_id_);
         current_state.current_tick = tick;
         current_state.timestamp = std::chrono::system_clock::now();
         
+        // Debug logging for Agent 10
+        if (agent_id_ == 10) {
+            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: Starting tick %d, current position from DB: (%d,%d)", 
+                       tick, current_state.current_x, current_state.current_y);
+        }
+        
         // Use BigTank algorithm to calculate next move
         AgentState new_state = bt::BigTank::calculate_next_move(current_state, ideal_path_, goal_, map_);
         
+        // Debug logging for Agent 10
+        if (agent_id_ == 10) {
+            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: After calculation, new position: (%d,%d)", 
+                       new_state.current_x, new_state.current_y);
+        }
+        
         // Log movement information
         if (new_state.current_x != current_state.current_x || new_state.current_y != current_state.current_y) {
-            RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f)", 
+            RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
                        agent_id_, current_state.current_x, current_state.current_y, 
                        new_state.current_x, new_state.current_y, 
-                       new_state.force.first, new_state.force.second);
+                       new_state.force.first, new_state.force.second, tick);
         } else if (!new_state.is_moving && !new_state.goal_reached) {
-            RCLCPP_WARN(this->get_logger(), "Agent %d blocked at (%d,%d), cannot move", 
-                       agent_id_, current_state.current_x, current_state.current_y);
+            RCLCPP_WARN(this->get_logger(), "Agent %d blocked at (%d,%d), cannot move at tick %d", 
+                       agent_id_, current_state.current_x, current_state.current_y, tick);
         }
         
         // Check if goal reached
-        if (new_state.goal_reached) {
-            RCLCPP_INFO(this->get_logger(), "Agent %d reached goal at (%d,%d)!", 
-                       agent_id_, new_state.current_x, new_state.current_y);
+        if (new_state.goal_reached && !current_state.goal_reached) {
+            RCLCPP_INFO(this->get_logger(), "Agent %d REACHED GOAL at (%d,%d) at tick %d! Job %s completed.", 
+                       agent_id_, new_state.current_x, new_state.current_y, tick, new_state.job_id.c_str());
         }
         
         // Update state in database
         db_->setState(agent_id_, new_state);
         
+        // Debug logging for Agent 10
+        if (agent_id_ == 10) {
+            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: Updated DB with position: (%d,%d)", 
+                       new_state.current_x, new_state.current_y);
+        }
+        
         // Trigger distributed coordination by publishing state
         state_updater_->publish_state_for_tick(tick);
-        
-        RCLCPP_INFO(this->get_logger(), "Agent %d completed processing tick %d", agent_id_, tick);
     }
 
 private:

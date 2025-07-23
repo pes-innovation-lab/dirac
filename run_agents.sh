@@ -16,8 +16,9 @@ echo "Sourcing the workspace..."
 source install/setup.bash
 
 # Launch the multi-agent system
-echo "Launching multi-agent system with slowed-down tick processing..."
+echo "Launching multi-agent system with DEBUG logging enabled..."
 echo "Each agent will process ticks every 2 seconds for easy observation."
 echo "Press Ctrl+C to stop the agents."
 echo ""
+export RCUTILS_LOGGING_SEVERITY_THRESHOLD=DEBUG
 ros2 launch bt simple_agents.launch.py

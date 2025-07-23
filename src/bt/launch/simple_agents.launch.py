@@ -3,14 +3,15 @@
 import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 import csv
 
 def generate_launch_description():
-    # Path to agents.csv (in workspace root)
-    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    workspace_dir = os.path.dirname(os.path.dirname(package_dir))
-    agents_csv_path = os.path.join(workspace_dir, 'agents.csv')
-    map_csv_path = os.path.join(workspace_dir, 'map.csv')
+    # Path to agents.csv (in install share directory)
+    from ament_index_python.packages import get_package_share_directory
+    package_share_directory = get_package_share_directory('bt')
+    agents_csv_path = os.path.join(package_share_directory, 'agents.csv')
+    map_csv_path = os.path.join(package_share_directory, 'map.csv')
     
     nodes = []
     

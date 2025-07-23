@@ -1,6 +1,8 @@
 #include "bt/big_tank.hpp"
 #include <cmath>
 #include <algorithm>
+#include <rclcpp/rclcpp.hpp>
+#include <limits>
 
 namespace bt {
 
@@ -11,8 +13,17 @@ AgentState BigTank::calculate_next_move(const AgentState& current_state,
     
     AgentState new_state = current_state;
     
-    // If goal already reached or no path, don't move
-    if (current_state.goal_reached || ideal_path.empty()) {
+    // If goal already reached, agent stays put and doesn't move
+    if (current_state.goal_reached) {
+        new_state.is_moving = false;
+        new_state.force.first = 0.0;
+        new_state.force.second = 0.0;
+        // Keep current position (no movement)
+        return new_state;
+    }
+    
+    // If no path available, can't move
+    if (ideal_path.empty()) {
         new_state.is_moving = false;
         new_state.force.first = 0.0;
         new_state.force.second = 0.0;
@@ -66,13 +77,24 @@ AgentState BigTank::calculate_next_move(const AgentState& current_state,
 std::pair<int, int> BigTank::find_next_waypoint(int current_x, int current_y,
                                                const std::vector<std::pair<int, int>>& ideal_path,
                                                const std::pair<int, int>& goal) {
-    // Find next waypoint in A* path
-    for (const auto& waypoint : ideal_path) {
-        if (waypoint.first != current_x || waypoint.second != current_y) {
-            return waypoint;
+    // Find current position in A* path, then return the next waypoint
+    for (size_t i = 0; i < ideal_path.size(); ++i) {
+        if (ideal_path[i].first == current_x && ideal_path[i].second == current_y) {
+            // Found current position, return next waypoint if it exists
+            if (i + 1 < ideal_path.size()) {
+                auto next = ideal_path[i + 1];
+                return next;
+            } else {
+                // Already at the last waypoint, go to goal
+                return goal;
+            }
         }
     }
-    // If no waypoint found, return goal
+    
+    // Current position not in path, go directly to goal
+    RCLCPP_WARN(rclcpp::get_logger("BigTank"), 
+        "Current position (%d,%d) NOT FOUND in ideal path! Going directly to goal (%d,%d)", 
+        current_x, current_y, goal.first, goal.second);
     return goal;
 }
 

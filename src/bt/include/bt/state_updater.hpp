@@ -15,7 +15,7 @@ namespace bt {
 class StateUpdater {
 public:
     StateUpdater(rclcpp::Node* node, int agent_id, std::shared_ptr<AgentStateDB> db, int total_agents, const std::string& agents_csv_path)
-    : node_(node), agent_id_(agent_id), db_(db), total_agents_(total_agents), current_global_tick_(0) {
+    : node_(node), agent_id_(agent_id), db_(db), total_agents_(total_agents), current_global_tick_(0), shutdown_initiated_(false) {
         // Get all agent IDs from CSV using FileIO
         all_agent_ids_ = bt::FileIO::get_all_agent_ids(agents_csv_path);
         
@@ -126,7 +126,7 @@ public:
                     db_->setStatePreserveLeadership(agent_id_, state);
                 }
                 
-                RCLCPP_INFO(node_->get_logger(), "Agent %d received state update from agent %d for tick %d (now have %zu/%zu agents)", 
+                RCLCPP_DEBUG(node_->get_logger(), "Agent %d received state update from agent %d for tick %d (now have %zu/%zu agents)", 
                             agent_id_, state.agent_id, tick, received_agents_by_tick_[tick].size(), all_agent_ids_.size());
                 
                 // Check if we should send ack now that we've received this state
@@ -152,7 +152,7 @@ public:
                     if (ack_tick == current_global_tick_) {
                         acks_by_tick_[ack_tick].insert(ack_agent_id);
                         
-                        RCLCPP_INFO(node_->get_logger(), "Leader received ack from agent %d for current tick %d (%zu/%zu)", 
+                        RCLCPP_DEBUG(node_->get_logger(), "Leader received ack from agent %d for current tick %d (%zu/%zu)", 
                                     ack_agent_id, ack_tick, acks_by_tick_[ack_tick].size(), all_agent_ids_.size());
                         
                         // Only advance when all agents have acknowledged the current tick
@@ -163,6 +163,7 @@ public:
                             // Clear old tick data to prevent memory buildup
                             acks_by_tick_.erase(ack_tick);
                             received_agents_by_tick_.erase(ack_tick);
+                            // Don't clear acks_sent_for_tick_ here - let it accumulate to prevent re-sending
                             
                             advance_global_tick();
                         }
@@ -198,6 +199,17 @@ public:
                     RCLCPP_DEBUG(node_->get_logger(), "Agent %d republishing state for tick %d", agent_id_, current_global_tick_);
                     maybe_write_own_state_immediately(current_global_tick_);
                 }
+                
+                // Clean up old acks_sent_for_tick_ entries to prevent memory buildup
+                // Keep only recent ticks (current and last 5)
+                auto it = acks_sent_for_tick_.begin();
+                while (it != acks_sent_for_tick_.end()) {
+                    if (*it < current_global_tick_ - 5) {
+                        it = acks_sent_for_tick_.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
             }
         );
     }
@@ -210,11 +222,22 @@ public:
         std_msgs::msg::String msg;
         msg.data = std::to_string(agent_id_) + "," + std::to_string(tick);
         state_ack_pub_->publish(msg);
-        RCLCPP_INFO(node_->get_logger(), "Agent %d sent acknowledgment for tick %d", agent_id_, tick);
+        RCLCPP_DEBUG(node_->get_logger(), "Agent %d sent acknowledgment for tick %d", agent_id_, tick);
     }
 
     int get_current_global_tick() const {
         return current_global_tick_;
+    }
+    
+    bool check_all_agents_completed() {
+        // Check if all agents have reached their goals and are not moving
+        for (int agent_id : all_agent_ids_) {
+            AgentState state = db_->getState(agent_id);
+            if (!state.goal_reached || state.is_moving) {
+                return false;
+            }
+        }
+        return true;
     }
     
     void publish_state_for_tick(int tick) {
@@ -238,6 +261,22 @@ private:
         // Leader also needs to process the new tick for itself
         if (tick_change_callback_) {
             tick_change_callback_(current_global_tick_);
+        }
+        
+        // Check if all agents have completed their jobs
+        if (!shutdown_initiated_ && check_all_agents_completed()) {
+            shutdown_initiated_ = true;
+            RCLCPP_INFO(node_->get_logger(), "ALL AGENTS COMPLETED THEIR JOBS! System will shutdown...");
+            RCLCPP_INFO(node_->get_logger(), "All agents have reached their goals and are stationary.");
+            
+            // Shutdown the ROS node immediately
+            shutdown_timer_ = node_->create_wall_timer(
+                std::chrono::milliseconds(100),
+                [this]() {
+                    RCLCPP_INFO(node_->get_logger(), "Shutting down node...");
+                    rclcpp::shutdown();
+                }
+            );
         }
     }
 
@@ -281,28 +320,26 @@ private:
         // Only mark as written and log for the first time
         if (!own_state_written_for_tick_[tick]) {
             own_state_written_for_tick_[tick] = true;
-            RCLCPP_INFO(node_->get_logger(), "Agent %d published state for tick %d", agent_id_, tick);
+            RCLCPP_DEBUG(node_->get_logger(), "Agent %d published state for tick %d", agent_id_, tick);
             // Mark that we've "received" our own state for this tick
             received_agents_by_tick_[tick].insert(agent_id_);
         }
     }
     
     void check_and_send_ack_if_ready(int tick) {
-        // Send ack only when we've written our state AND received all other states
-        if (own_state_written_for_tick_[tick] && received_agents_by_tick_[tick].size() == all_agent_ids_.size()) {
+        // Send ack ONLY when we have received state updates from ALL agents for this tick
+        // This includes our own state (which gets added to received_agents_by_tick_ when we publish)
+        if (received_agents_by_tick_[tick].size() == all_agent_ids_.size()) {
             // Check if we already sent ack for this tick to avoid spam
-            static std::set<int> acks_sent;
-            if (acks_sent.find(tick) == acks_sent.end()) {
-                RCLCPP_INFO(node_->get_logger(), "Agent %d sending ACK for tick %d (received %zu/%zu agent states)", 
+            if (acks_sent_for_tick_.find(tick) == acks_sent_for_tick_.end()) {
+                RCLCPP_DEBUG(node_->get_logger(), "Agent %d sending ACK for tick %d (received %zu/%zu agent states)", 
                            agent_id_, tick, received_agents_by_tick_[tick].size(), all_agent_ids_.size());
                 send_state_ack(tick);
-                acks_sent.insert(tick);
+                acks_sent_for_tick_.insert(tick);
             }
         } else {
-            RCLCPP_DEBUG(node_->get_logger(), "Agent %d not ready for ACK on tick %d (own_written:%s, received:%zu/%zu)", 
-                        agent_id_, tick, 
-                        own_state_written_for_tick_[tick] ? "yes" : "no",
-                        received_agents_by_tick_[tick].size(), all_agent_ids_.size());
+            RCLCPP_DEBUG(node_->get_logger(), "Agent %d not ready for ACK on tick %d (received:%zu/%zu agent states)", 
+                        agent_id_, tick, received_agents_by_tick_[tick].size(), all_agent_ids_.size());
         }
     }
 
@@ -312,6 +349,7 @@ private:
     int total_agents_;
     bool is_leader_;
     int current_global_tick_;
+    bool shutdown_initiated_;
     
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr db_update_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_ack_pub_;
@@ -322,11 +360,13 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr global_tick_sub_;
     
     rclcpp::TimerBase::SharedPtr republish_timer_;
+    rclcpp::TimerBase::SharedPtr shutdown_timer_;
     
     std::set<int> all_agent_ids_;
     std::unordered_map<int, std::set<int>> received_agents_by_tick_;
     std::unordered_map<int, std::set<int>> acks_by_tick_;
     std::unordered_map<int, bool> own_state_written_for_tick_;
+    std::set<int> acks_sent_for_tick_;
     
     std::function<void(int)> tick_change_callback_;
 };
