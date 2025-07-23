@@ -4,11 +4,11 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <dirac_msgs/msg/agent_command.hpp>
+#include "dirac_navigation/strategies/movement_strategy.hpp"
+#include "dirac_navigation/strategies/movement_strategy_factory.hpp"
 #include <map>
 #include <string>
-#include <chrono>
-#include <functional>
-#include <cmath>
+#include <memory>
 
 namespace dirac_navigation
 {
@@ -23,31 +23,7 @@ public:
     explicit NavigationController(rclcpp::Node::SharedPtr node);
 
     /**
-     * @brief Move turtle forward by configured distance
-     * @param agent_id ID of the agent/turtle to move
-     */
-    void move_forward(int32_t agent_id);
-
-    /**
-     * @brief Move turtle backward by configured distance
-     * @param agent_id ID of the agent/turtle to move
-     */
-    void move_backward(int32_t agent_id);
-
-    /**
-     * @brief Move turtle left (turn left 90°, move forward, turn right 90°)
-     * @param agent_id ID of the agent/turtle to move
-     */
-    void move_left(int32_t agent_id);
-
-    /**
-     * @brief Move turtle right (turn right 90°, move forward, turn left 90°)
-     * @param agent_id ID of the agent/turtle to move
-     */
-    void move_right(int32_t agent_id);
-
-    /**
-     * @brief Execute movement command based on direction
+     * @brief Execute movement command based on direction using strategy pattern
      * @param agent_id ID of the agent/turtle to move
      * @param direction Direction code (1=forward, 2=backward, 3=left, 4=right)
      */
@@ -79,14 +55,8 @@ private:
     // Map of agent_id to their respective cmd_vel publishers
     std::map<int32_t, rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr> publishers_;
     
-    // Map of agent_id to their timers (to keep timers alive)
-    std::map<int32_t, rclcpp::TimerBase::SharedPtr> timers_;
-    
-    // Movement parameters
-    double linear_speed_;
-    double angular_speed_;
-    double move_distance_;
-    double turn_angle_;
+    // Movement parameters (now using strategy pattern structure)
+    strategies::MovementParameters movement_parameters_;
     
     // Topic configuration
     std::string cmd_vel_topic_;
@@ -94,11 +64,13 @@ private:
 
     // Private helper methods
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr get_or_create_publisher(int32_t agent_id);
-    void move_forward_then_turn_right(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
-    void move_forward_then_turn_left(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
-    void turn_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, 
-                     double angular_vel, std::function<void()> callback);
-    void stop_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
+    
+    /**
+     * @brief Create movement context for strategy execution
+     * @param agent_id ID of the agent
+     * @return Movement context with all necessary information
+     */
+    strategies::MovementContext createMovementContext(int32_t agent_id);
 };
 
 } // namespace dirac_navigation

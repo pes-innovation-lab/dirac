@@ -6,25 +6,28 @@ namespace dirac_navigation
 NavigationController::NavigationController(rclcpp::Node::SharedPtr node)
     : node_(node)
 {
-    // Default movement parameters
-    linear_speed_ = 2.0;   // Linear velocity
-    angular_speed_ = 1.57; // Angular velocity (π/2 rad/s for 90° turns)
-    move_distance_ = 1.0;  // Distance to move forward/backward (1 unit)
-    turn_angle_ = 1.57;    // 90 degrees in radians (π/2)
-    cmd_vel_topic_ = "cmd_vel"; // Default topic name
-    is_simulation_mode_ = true; // Default to simulation mode
+    // Default movement parameters - now using strategy pattern structure
+    movement_parameters_.linear_speed = 2.0;      // Linear velocity
+    movement_parameters_.angular_speed = 1.57;    // Angular velocity (π/2 rad/s for 90° turns)
+    movement_parameters_.move_distance = 1.0;     // Distance to move forward/backward (1 unit)
+    movement_parameters_.turn_angle = 1.57;       // 90 degrees in radians (π/2)
+    
+    cmd_vel_topic_ = "cmd_vel";                   // Default topic name
+    is_simulation_mode_ = true;                   // Default to simulation mode
 
-    RCLCPP_INFO(node_->get_logger(), "Navigation Controller library initialized");
+    RCLCPP_INFO(node_->get_logger(), "Navigation Controller library initialized with strategy pattern");
 }
 
 void NavigationController::set_movement_parameters(double linear_speed, double angular_speed, double move_distance)
 {
-    linear_speed_ = linear_speed;
-    angular_speed_ = angular_speed;
-    move_distance_ = move_distance;
+    movement_parameters_.linear_speed = linear_speed;
+    movement_parameters_.angular_speed = angular_speed;
+    movement_parameters_.move_distance = move_distance;
+    // Keep turn_angle consistent with angular_speed (90 degrees)
+    movement_parameters_.turn_angle = 1.57;
     
     RCLCPP_INFO(node_->get_logger(), "Movement parameters updated: linear=%.2f, angular=%.2f, distance=%.2f", 
-                linear_speed_, angular_speed_, move_distance_);
+                movement_parameters_.linear_speed, movement_parameters_.angular_speed, movement_parameters_.move_distance);
 }
 
 void NavigationController::set_cmd_vel_topic(const std::string& topic_name)
@@ -43,156 +46,35 @@ void NavigationController::execute_command(int32_t agent_id, int32_t direction)
 {
     RCLCPP_INFO(node_->get_logger(), "Executing command for agent %d: direction %d", agent_id, direction);
     
-    switch(direction) {
-        case 1: // Forward
-            move_forward(agent_id);
-            break;
-        case 2: // Backward
-            move_backward(agent_id);
-            break;
-        case 3: // Left
-            move_left(agent_id);
-            break;
-        case 4: // Right
-            move_right(agent_id);
-            break;
-        default:
-            RCLCPP_WARN(node_->get_logger(), "Invalid direction %d for agent %d. Valid directions: 1=forward, 2=backward, 3=left, 4=right", 
-                       direction, agent_id);
+    // Create strategy using factory
+    auto strategy = strategies::MovementStrategyFactory::createStrategy(direction);
+    
+    if (!strategy) {
+        RCLCPP_WARN(node_->get_logger(), 
+                   "Invalid direction %d for agent %d. Valid directions: 1=forward, 2=backward, 3=left, 4=right", 
+                   direction, agent_id);
+        return;
     }
+    
+    // Create movement context
+    strategies::MovementContext context = createMovementContext(agent_id);
+    
+    // Execute the strategy
+    RCLCPP_INFO(node_->get_logger(), "Agent %d: Executing %s strategy", 
+               agent_id, strategy->getName().c_str());
+    strategy->execute(context);
 }
 
-void NavigationController::move_forward(int32_t agent_id)
+strategies::MovementContext NavigationController::createMovementContext(int32_t agent_id)
 {
-    RCLCPP_INFO(node_->get_logger(), "Agent %d: Moving forward %.2f units", agent_id, move_distance_);
+    strategies::MovementContext context;
+    context.publisher = get_or_create_publisher(agent_id);
+    context.node = node_;
+    context.parameters = movement_parameters_;
+    context.agent_id = agent_id;
+    context.completion_callback = nullptr; // Can be set by caller if needed
     
-    auto publisher = get_or_create_publisher(agent_id);
-    auto twist_msg = geometry_msgs::msg::Twist();
-    twist_msg.linear.x = linear_speed_;
-    twist_msg.angular.z = 0.0;
-    
-    publisher->publish(twist_msg);
-    
-    // Calculate duration to move exactly the configured distance
-    auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-    
-    auto timer = node_->create_wall_timer(duration, [this, publisher, agent_id]() {
-        stop_turtle(publisher, agent_id);
-    });
-    
-    timers_[agent_id] = timer;
-}
-
-void NavigationController::move_backward(int32_t agent_id)
-{
-    RCLCPP_INFO(node_->get_logger(), "Agent %d: Moving backward %.2f units", agent_id, move_distance_);
-    
-    auto publisher = get_or_create_publisher(agent_id);
-    auto twist_msg = geometry_msgs::msg::Twist();
-    twist_msg.linear.x = -linear_speed_;
-    twist_msg.angular.z = 0.0;
-    
-    publisher->publish(twist_msg);
-    
-    // Calculate duration to move exactly the configured distance
-    auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-    
-    auto timer = node_->create_wall_timer(duration, [this, publisher, agent_id]() {
-        stop_turtle(publisher, agent_id);
-    });
-    
-    timers_[agent_id] = timer;
-}
-
-void NavigationController::move_left(int32_t agent_id)
-{
-    RCLCPP_INFO(node_->get_logger(), "Agent %d: Moving left (turn-move-turn sequence)", agent_id);
-    
-    auto publisher = get_or_create_publisher(agent_id);
-    
-    // Step 1: Turn left 90 degrees
-    turn_turtle(publisher, angular_speed_, [this, publisher, agent_id]() {
-        // Step 2: Move forward configured distance
-        move_forward_then_turn_right(publisher, agent_id);
-    });
-}
-
-void NavigationController::move_right(int32_t agent_id)
-{
-    RCLCPP_INFO(node_->get_logger(), "Agent %d: Moving right (turn-move-turn sequence)", agent_id);
-    
-    auto publisher = get_or_create_publisher(agent_id);
-    
-    // Step 1: Turn right 90 degrees
-    turn_turtle(publisher, -angular_speed_, [this, publisher, agent_id]() {
-        // Step 2: Move forward configured distance
-        move_forward_then_turn_left(publisher, agent_id);
-    });
-}
-
-void NavigationController::move_forward_then_turn_right(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
-{
-    auto twist_msg = geometry_msgs::msg::Twist();
-    twist_msg.linear.x = linear_speed_;
-    twist_msg.angular.z = 0.0;
-    
-    publisher->publish(twist_msg);
-    
-    auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-    
-    auto timer = node_->create_wall_timer(duration, [this, publisher, agent_id]() {
-        // Step 3: Turn right 90 degrees to reset orientation
-        turn_turtle(publisher, -angular_speed_, [this, publisher, agent_id]() {
-            stop_turtle(publisher, agent_id);
-        });
-    });
-    
-    timers_[agent_id] = timer;
-}
-
-void NavigationController::move_forward_then_turn_left(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
-{
-    auto twist_msg = geometry_msgs::msg::Twist();
-    twist_msg.linear.x = linear_speed_;
-    twist_msg.angular.z = 0.0;
-    
-    publisher->publish(twist_msg);
-    
-    auto duration = std::chrono::milliseconds(static_cast<int>((move_distance_ / linear_speed_) * 1000));
-    
-    auto timer = node_->create_wall_timer(duration, [this, publisher, agent_id]() {
-        // Step 3: Turn left 90 degrees to reset orientation
-        turn_turtle(publisher, angular_speed_, [this, publisher, agent_id]() {
-            stop_turtle(publisher, agent_id);
-        });
-    });
-    
-    timers_[agent_id] = timer;
-}
-
-void NavigationController::turn_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, 
-                                       double angular_vel, std::function<void()> callback)
-{
-    auto twist_msg = geometry_msgs::msg::Twist();
-    twist_msg.linear.x = 0.0;
-    twist_msg.angular.z = angular_vel;
-    
-    publisher->publish(twist_msg);
-    
-    // Calculate duration to turn exactly 90 degrees
-    auto duration = std::chrono::milliseconds(static_cast<int>((turn_angle_ / std::abs(angular_vel)) * 1000));
-    
-    auto timer = node_->create_wall_timer(duration, callback);
-    // Note: We don't store this timer in the map since it's temporary for the sequence
-}
-
-void NavigationController::stop_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id)
-{
-    auto stop_msg = geometry_msgs::msg::Twist();
-    stop_msg.linear.x = 0.0;
-    stop_msg.angular.z = 0.0;
-    publisher->publish(stop_msg);
-    RCLCPP_INFO(node_->get_logger(), "Agent %d: Movement complete", agent_id);
+    return context;
 }
 
 rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr 

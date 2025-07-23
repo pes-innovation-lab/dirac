@@ -14,6 +14,12 @@ find_package(dirac_msgs REQUIRED)
 # Create library
 add_library(navigation_controller SHARED
   src/navigation_controller.cpp
+  src/strategies/movement_strategy.cpp
+  src/strategies/forward_movement.cpp
+  src/strategies/backward_movement.cpp
+  src/strategies/left_movement.cpp
+  src/strategies/right_movement.cpp
+  src/strategies/movement_strategy_factory.cpp
 )
 
 ament_target_dependencies(navigation_controller 
