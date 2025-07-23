@@ -6,6 +6,7 @@
 #include <dirac_msgs/msg/agent_command.hpp>
 #include "dirac_navigation/strategies/movement_strategy.hpp"
 #include "dirac_navigation/strategies/movement_strategy_factory.hpp"
+#include "dirac_navigation/publishers/publisher_manager.hpp"
 #include <map>
 #include <string>
 #include <memory>
@@ -52,19 +53,13 @@ public:
 private:
     rclcpp::Node::SharedPtr node_;
     
-    // Map of agent_id to their respective cmd_vel publishers
-    std::map<int32_t, rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr> publishers_;
+    // Publisher manager for handling multiple agent publishers
+    std::unique_ptr<publishers::PublisherManager> publisher_manager_;
     
     // Movement parameters (now using strategy pattern structure)
     strategies::MovementParameters movement_parameters_;
-    
-    // Topic configuration
-    std::string cmd_vel_topic_;
-    bool is_simulation_mode_;
 
-    // Private helper methods
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr get_or_create_publisher(int32_t agent_id);
-    
+    // Private helper methods    
     /**
      * @brief Create movement context for strategy execution
      * @param agent_id ID of the agent

@@ -6,16 +6,24 @@ namespace dirac_navigation
 NavigationController::NavigationController(rclcpp::Node::SharedPtr node)
     : node_(node)
 {
+    if (!node_) {
+        throw std::invalid_argument("Node cannot be null");
+    }
+    
     // Default movement parameters - now using strategy pattern structure
     movement_parameters_.linear_speed = 2.0;      // Linear velocity
     movement_parameters_.angular_speed = 1.57;    // Angular velocity (π/2 rad/s for 90° turns)
     movement_parameters_.move_distance = 1.0;     // Distance to move forward/backward (1 unit)
     movement_parameters_.turn_angle = 1.57;       // 90 degrees in radians (π/2)
     
-    cmd_vel_topic_ = "cmd_vel";                   // Default topic name
-    is_simulation_mode_ = true;                   // Default to simulation mode
+    // Initialize publisher manager with default configuration
+    publishers::TopicConfig default_config;
+    default_config.base_topic = "cmd_vel";
+    default_config.simulation_mode = true;
+    
+    publisher_manager_ = std::make_unique<publishers::PublisherManager>(node_, default_config);
 
-    RCLCPP_INFO(node_->get_logger(), "Navigation Controller library initialized with strategy pattern");
+    RCLCPP_INFO(node_->get_logger(), "Navigation Controller library initialized with strategy pattern and publisher manager");
 }
 
 void NavigationController::set_movement_parameters(double linear_speed, double angular_speed, double move_distance)
@@ -32,14 +40,23 @@ void NavigationController::set_movement_parameters(double linear_speed, double a
 
 void NavigationController::set_cmd_vel_topic(const std::string& topic_name)
 {
-    cmd_vel_topic_ = topic_name;
-    RCLCPP_INFO(node_->get_logger(), "Command velocity topic set to: %s", cmd_vel_topic_.c_str());
+    publishers::TopicConfig config;
+    config.base_topic = topic_name;
+    config.simulation_mode = true; // Default to simulation mode when topic changes
+    
+    publisher_manager_->updateConfig(config);
+    RCLCPP_INFO(node_->get_logger(), "Command velocity topic updated to: %s", topic_name.c_str());
 }
 
 void NavigationController::set_simulation_mode(bool is_simulation)
 {
-    is_simulation_mode_ = is_simulation;
-    RCLCPP_INFO(node_->get_logger(), "Simulation mode set to: %s", is_simulation ? "true (turtle topics)" : "false (namespaced robot topics)");
+    publishers::TopicConfig config;
+    config.simulation_mode = is_simulation;
+    config.base_topic = "cmd_vel"; // Keep current base topic
+    
+    publisher_manager_->updateConfig(config);
+    RCLCPP_INFO(node_->get_logger(), "Simulation mode updated to: %s", 
+                is_simulation ? "true (turtle topics)" : "false (namespaced robot topics)");
 }
 
 void NavigationController::execute_command(int32_t agent_id, int32_t direction)
@@ -68,45 +85,13 @@ void NavigationController::execute_command(int32_t agent_id, int32_t direction)
 strategies::MovementContext NavigationController::createMovementContext(int32_t agent_id)
 {
     strategies::MovementContext context;
-    context.publisher = get_or_create_publisher(agent_id);
+    context.publisher = publisher_manager_->getPublisher(agent_id);
     context.node = node_;
     context.parameters = movement_parameters_;
     context.agent_id = agent_id;
     context.completion_callback = nullptr; // Can be set by caller if needed
     
     return context;
-}
-
-rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr 
-NavigationController::get_or_create_publisher(int32_t agent_id)
-{
-    // Check if publisher already exists for this agent
-    auto it = publishers_.find(agent_id);
-    if (it != publishers_.end()) {
-        return it->second;
-    }
-    
-    // Create new publisher for this agent using configured topic name
-    std::string topic_name;
-    
-    if (is_simulation_mode_) {
-        // Simulation mode: publish to turtle-specific topics
-        topic_name = "/turtle" + std::to_string(agent_id) + "/" + cmd_vel_topic_;
-    } else {
-        // Non-simulation mode: publish to namespaced robot topics
-        topic_name = "/robot" + std::to_string(agent_id) + "/" + cmd_vel_topic_;
-    }
-    
-    RCLCPP_INFO(node_->get_logger(), "Creating publisher for agent %d on topic '%s'", agent_id, topic_name.c_str());
-    
-    auto publisher = node_->create_publisher<geometry_msgs::msg::Twist>(topic_name, 10);
-    
-    publishers_[agent_id] = publisher;
-    
-    RCLCPP_INFO(node_->get_logger(), "Created publisher for agent %d on topic '%s'", 
-                agent_id, topic_name.c_str());
-    
-    return publisher;
 }
 
 } // namespace dirac_navigation

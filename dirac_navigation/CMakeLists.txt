@@ -20,6 +20,7 @@ add_library(navigation_controller SHARED
   src/strategies/left_movement.cpp
   src/strategies/right_movement.cpp
   src/strategies/movement_strategy_factory.cpp
+  src/publishers/publisher_manager.cpp
 )
 
 ament_target_dependencies(navigation_controller 
