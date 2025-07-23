@@ -7,6 +7,7 @@
 #include "dirac_navigation/strategies/movement_strategy.hpp"
 #include "dirac_navigation/strategies/movement_strategy_factory.hpp"
 #include "dirac_navigation/publishers/publisher_manager.hpp"
+#include "dirac_navigation/config/navigation_config.hpp"
 #include <map>
 #include <string>
 #include <memory>
@@ -20,8 +21,29 @@ public:
     /**
      * @brief Constructor for NavigationController
      * @param node Shared pointer to ROS2 node for creating publishers and timers
+     * @param config Optional navigation configuration (will load from parameters if not provided)
      */
-    explicit NavigationController(rclcpp::Node::SharedPtr node);
+    explicit NavigationController(rclcpp::Node::SharedPtr node, 
+                                 const config::NavigationConfig& config = config::NavigationConfig{});
+
+    /**
+     * @brief Initialize from ROS parameters
+     * @param node ROS2 node to load parameters from
+     * @return True if successfully initialized
+     */
+    bool initializeFromParameters(rclcpp::Node::SharedPtr node);
+
+    /**
+     * @brief Update configuration
+     * @param config New navigation configuration
+     */
+    void updateConfiguration(const config::NavigationConfig& config);
+
+    /**
+     * @brief Get current configuration
+     * @return Current navigation configuration
+     */
+    const config::NavigationConfig& getConfiguration() const;
 
     /**
      * @brief Execute movement command based on direction using strategy pattern
@@ -53,11 +75,11 @@ public:
 private:
     rclcpp::Node::SharedPtr node_;
     
+    // Configuration management
+    config::NavigationConfig config_;
+    
     // Publisher manager for handling multiple agent publishers
     std::unique_ptr<publishers::PublisherManager> publisher_manager_;
-    
-    // Movement parameters (now using strategy pattern structure)
-    strategies::MovementParameters movement_parameters_;
 
     // Private helper methods    
     /**
@@ -66,6 +88,11 @@ private:
      * @return Movement context with all necessary information
      */
     strategies::MovementContext createMovementContext(int32_t agent_id);
+    
+    /**
+     * @brief Apply configuration to internal components
+     */
+    void applyConfiguration();
 };
 
 } // namespace dirac_navigation

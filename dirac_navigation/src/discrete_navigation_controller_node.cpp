@@ -11,9 +11,6 @@ public:
         // Get agent ID from environment first
         get_agent_id();
         
-        // Load parameters from config
-        load_parameters();
-        
         // Setup topics with agent namespace
         setup_topics();
 
@@ -26,13 +23,12 @@ public:
         // Initialize the navigation library after the node is fully constructed
         navigation_ = std::make_shared<dirac_navigation::NavigationController>(shared_from_this());
         
-        // Configure with loaded parameters
-        navigation_->set_simulation_mode(is_simulation_mode_);
-        navigation_->set_movement_parameters(linear_speed_, angular_speed_, move_distance_);
-        navigation_->set_cmd_vel_topic(cmd_vel_topic_);
+        // Initialize from ROS parameters (this will handle all configuration)
+        if (!navigation_->initializeFromParameters(shared_from_this())) {
+            RCLCPP_WARN(this->get_logger(), "Failed to initialize from parameters, using defaults");
+        }
         
-        RCLCPP_INFO(this->get_logger(), "Navigation controller initialized for agent %d in %s mode", 
-                    agent_id_, is_simulation_mode_ ? "simulation" : "real robot");
+        RCLCPP_INFO(this->get_logger(), "Navigation controller initialized for agent %d", agent_id_);
     }
 
 private:
@@ -54,12 +50,9 @@ private:
 
     void setup_topics()
     {
-        // Get simulation mode from configuration parameter
+        // Get simulation mode from configuration parameter (still needed for topic naming)
         this->declare_parameter("simulation_mode", true);
         bool is_simulation = this->get_parameter("simulation_mode").as_bool();
-        
-        // Store simulation mode for later use
-        is_simulation_mode_ = is_simulation;
         
         // Create subscription to agent commands with robot namespace
         std::string commands_topic = "/robot" + std::to_string(agent_id_) + "/agent_commands";
@@ -70,24 +63,6 @@ private:
             
         RCLCPP_INFO(this->get_logger(), "Listening for agent commands on '%s' topic", commands_topic.c_str());
         RCLCPP_INFO(this->get_logger(), "Running in %s mode", is_simulation ? "simulation" : "real robot");
-    }
-
-    void load_parameters()
-    {
-        // Declare parameters with default values
-        this->declare_parameter("navigation.linear_speed", 2.0);
-        this->declare_parameter("navigation.angular_speed", 1.57);
-        this->declare_parameter("navigation.move_distance", 1.0);
-        this->declare_parameter("navigation.cmd_vel_topic", "cmd_vel");
-        
-        // Get parameter values
-        linear_speed_ = this->get_parameter("navigation.linear_speed").as_double();
-        angular_speed_ = this->get_parameter("navigation.angular_speed").as_double();
-        move_distance_ = this->get_parameter("navigation.move_distance").as_double();
-        cmd_vel_topic_ = this->get_parameter("navigation.cmd_vel_topic").as_string();
-        
-        RCLCPP_INFO(this->get_logger(), "Loaded parameters: linear_speed=%.2f, angular_speed=%.2f, move_distance=%.2f, cmd_vel_topic=%s",
-                    linear_speed_, angular_speed_, move_distance_, cmd_vel_topic_.c_str());
     }
 
     void command_callback(const dirac_msgs::msg::AgentCommand::SharedPtr msg)
@@ -111,13 +86,6 @@ private:
     
     // Agent ID for this controller instance
     int32_t agent_id_;
-    
-    // Parameter storage
-    double linear_speed_;
-    double angular_speed_;
-    double move_distance_;
-    std::string cmd_vel_topic_;
-    bool is_simulation_mode_;
 };
 
 int main(int argc, char * argv[])
