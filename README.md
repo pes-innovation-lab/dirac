@@ -65,3 +65,19 @@ zone leader -> /jobs -> agents in the zone
 agents -> /zone_x/job_bids -> zone leader
 zone leader -> /jobs (with assignment) -> assigned agent
 assigned agent -> /jobs (with completion) -> zone leader and other agents
+
+
+
+
+---
+
+how to run the code 
+clone the repo and make a workspace and add the src directory to the workspace
+1.  **Source your ROS 2 environment:**
+    `source /opt/ros/humble/setup.bash`
+2.  **Build the `agentswarm` package:**
+    `colcon build --packages-select agentswarm`
+3.  **Source your workspace's install setup:**
+    `source install/setup.bash`
+4.  **Launch the `spawnagent` node:**
+    `ros2 launch agentswarm spawnagent.launch.py`
