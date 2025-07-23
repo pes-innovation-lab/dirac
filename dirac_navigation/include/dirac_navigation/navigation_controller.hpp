@@ -4,11 +4,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <dirac_msgs/msg/agent_command.hpp>
+#include "dirac_navigation/strategies/movement_strategy.hpp"
+#include "dirac_navigation/strategies/movement_strategy_factory.hpp"
+#include "dirac_navigation/publishers/publisher_manager.hpp"
+#include "dirac_navigation/config/navigation_config.hpp"
 #include <map>
 #include <string>
-#include <chrono>
-#include <functional>
-#include <cmath>
+#include <memory>
 
 namespace dirac_navigation
 {
@@ -19,35 +21,32 @@ public:
     /**
      * @brief Constructor for NavigationController
      * @param node Shared pointer to ROS2 node for creating publishers and timers
+     * @param config Optional navigation configuration (will load from parameters if not provided)
      */
-    explicit NavigationController(rclcpp::Node::SharedPtr node);
+    explicit NavigationController(rclcpp::Node::SharedPtr node, 
+                                 const config::NavigationConfig& config = config::NavigationConfig{});
 
     /**
-     * @brief Move turtle forward by configured distance
-     * @param agent_id ID of the agent/turtle to move
+     * @brief Initialize from ROS parameters
+     * @param node ROS2 node to load parameters from
+     * @return True if successfully initialized
      */
-    void move_forward(int32_t agent_id);
+    bool initializeFromParameters(rclcpp::Node::SharedPtr node);
 
     /**
-     * @brief Move turtle backward by configured distance
-     * @param agent_id ID of the agent/turtle to move
+     * @brief Update configuration
+     * @param config New navigation configuration
      */
-    void move_backward(int32_t agent_id);
+    void updateConfiguration(const config::NavigationConfig& config);
 
     /**
-     * @brief Move turtle left (turn left 90°, move forward, turn right 90°)
-     * @param agent_id ID of the agent/turtle to move
+     * @brief Get current configuration
+     * @return Current navigation configuration
      */
-    void move_left(int32_t agent_id);
+    const config::NavigationConfig& getConfiguration() const;
 
     /**
-     * @brief Move turtle right (turn right 90°, move forward, turn left 90°)
-     * @param agent_id ID of the agent/turtle to move
-     */
-    void move_right(int32_t agent_id);
-
-    /**
-     * @brief Execute movement command based on direction
+     * @brief Execute movement command based on direction using strategy pattern
      * @param agent_id ID of the agent/turtle to move
      * @param direction Direction code (1=forward, 2=backward, 3=left, 4=right)
      */
@@ -76,29 +75,24 @@ public:
 private:
     rclcpp::Node::SharedPtr node_;
     
-    // Map of agent_id to their respective cmd_vel publishers
-    std::map<int32_t, rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr> publishers_;
+    // Configuration management
+    config::NavigationConfig config_;
     
-    // Map of agent_id to their timers (to keep timers alive)
-    std::map<int32_t, rclcpp::TimerBase::SharedPtr> timers_;
-    
-    // Movement parameters
-    double linear_speed_;
-    double angular_speed_;
-    double move_distance_;
-    double turn_angle_;
-    
-    // Topic configuration
-    std::string cmd_vel_topic_;
-    bool is_simulation_mode_;
+    // Publisher manager for handling multiple agent publishers
+    std::unique_ptr<publishers::PublisherManager> publisher_manager_;
 
-    // Private helper methods
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr get_or_create_publisher(int32_t agent_id);
-    void move_forward_then_turn_right(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
-    void move_forward_then_turn_left(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
-    void turn_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, 
-                     double angular_vel, std::function<void()> callback);
-    void stop_turtle(rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher, int32_t agent_id);
+    // Private helper methods    
+    /**
+     * @brief Create movement context for strategy execution
+     * @param agent_id ID of the agent
+     * @return Movement context with all necessary information
+     */
+    strategies::MovementContext createMovementContext(int32_t agent_id);
+    
+    /**
+     * @brief Apply configuration to internal components
+     */
+    void applyConfiguration();
 };
 
 } // namespace dirac_navigation

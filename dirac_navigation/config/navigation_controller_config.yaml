@@ -8,6 +8,7 @@ discrete_navigation_controller:
       linear_speed: 2.0      # Linear velocity (m/s)
       angular_speed: 1.57    # Angular velocity (rad/s) - π/2 for 90° turns
       move_distance: 1.0     # Distance to move in each command (units)
+      turn_angle: 1.57       # Turn angle in radians (π/2 for 90° turns)
       
       # Topic configuration
       cmd_vel_topic: "cmd_vel"  # Base topic name for command velocity
