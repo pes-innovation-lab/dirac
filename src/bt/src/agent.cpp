@@ -2,12 +2,15 @@
 #include <fstream>
 #include <functional>
 #include <filesystem>
+#include <thread>
+#include <chrono>
 #include "rclcpp/rclcpp.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "bt/file_io.hpp"
 #include "bt/agent_state_db.hpp"
 #include "bt/state_updater.hpp"
 #include "bt/path_planner.hpp"
+#include "bt/big_tank.hpp"
 
 class Agent : public rclcpp::Node {
 public:
@@ -107,14 +110,35 @@ private:
     void process_tick(int tick) {
         RCLCPP_INFO(this->get_logger(), "Agent %d starting processing for tick %d", agent_id_, tick);
         
-        // Update agent's state for this tick (placeholder - implement your logic here)
+        // Add delay to slow down tick processing for observation
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        
         AgentState current_state = db_->getState(agent_id_);
         current_state.current_tick = tick;
         current_state.timestamp = std::chrono::system_clock::now();
         
-        // TODO: Implement agent decision-making logic here
-        // For now, just update the state
-        db_->setState(agent_id_, current_state);
+        // Use BigTank algorithm to calculate next move
+        AgentState new_state = bt::BigTank::calculate_next_move(current_state, ideal_path_, goal_, map_);
+        
+        // Log movement information
+        if (new_state.current_x != current_state.current_x || new_state.current_y != current_state.current_y) {
+            RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f)", 
+                       agent_id_, current_state.current_x, current_state.current_y, 
+                       new_state.current_x, new_state.current_y, 
+                       new_state.force.first, new_state.force.second);
+        } else if (!new_state.is_moving && !new_state.goal_reached) {
+            RCLCPP_WARN(this->get_logger(), "Agent %d blocked at (%d,%d), cannot move", 
+                       agent_id_, current_state.current_x, current_state.current_y);
+        }
+        
+        // Check if goal reached
+        if (new_state.goal_reached) {
+            RCLCPP_INFO(this->get_logger(), "Agent %d reached goal at (%d,%d)!", 
+                       agent_id_, new_state.current_x, new_state.current_y);
+        }
+        
+        // Update state in database
+        db_->setState(agent_id_, new_state);
         
         // Trigger distributed coordination by publishing state
         state_updater_->publish_state_for_tick(tick);

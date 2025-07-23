@@ -11,7 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 
-add_executable(agent src/agent.cpp src/path_planner.cpp)
+add_executable(agent src/agent.cpp src/path_planner.cpp src/big_tank.cpp)
 target_include_directories(agent PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
