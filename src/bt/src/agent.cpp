@@ -27,8 +27,9 @@ public:
         RCLCPP_INFO(this->get_logger(), "Looking for agents.csv at: %s", agents_csv_path.c_str());
         RCLCPP_INFO(this->get_logger(), "Looking for map.csv at: %s", map_csv_path.c_str());
 
-        auto [start, job_id, goal, is_leader] = bt::FileIO::get_agent_info(agents_csv_path, agent_id_);
+        auto [start, priority, job_id, goal, is_leader] = bt::FileIO::get_agent_info(agents_csv_path, agent_id_);
         start_ = start;
+        priority_ = priority;
         job_id_ = job_id;
         goal_ = goal;
         is_leader_ = is_leader;
@@ -51,6 +52,9 @@ public:
         // Initialize agent state in database FIRST
         initialize_agent_state();
 
+        // Initialize BigTank shared database
+        bt::BigTank::initialize_shared_db(db_);
+
         // Create StateUpdater AFTER agent state is initialized
         state_updater_ = std::make_unique<bt::StateUpdater>(this, agent_id_, db_, total_agents, agents_csv_path);
 
@@ -66,8 +70,10 @@ public:
         current_tick_ = 0;
         if (state_updater_->get_current_global_tick() == 0) {
             RCLCPP_INFO(this->get_logger(), "Agent %d starting initial tick processing", agent_id_);
-            // Kick off the first tick by publishing initial state
-            process_tick(current_tick_);
+            
+            // DO NOT call process_tick() here - wait for tick_change_callback after state synchronization
+            // Instead, just publish initial state to trigger acknowledgment system
+            state_updater_->publish_state_for_tick(current_tick_);
         }
 
         RCLCPP_INFO(this->get_logger(), "Agent %d start: (%d,%d), job_id: %s, goal: (%d,%d)", agent_id_, start_.first, start_.second, job_id_.c_str(), goal_.first, goal_.second);
@@ -81,7 +87,7 @@ private:
         initial_state.agent_id = agent_id_;
         initial_state.current_x = start_.first;
         initial_state.current_y = start_.second;
-        initial_state.priority = 1; // Default priority
+        initial_state.priority = priority_; // Use priority from CSV
         initial_state.job_id = job_id_;
         initial_state.goal_x = goal_.first;
         initial_state.goal_y = goal_.second;
@@ -94,6 +100,32 @@ private:
         initial_state.stuck_counter = 0;
         initial_state.force_multiplier = 1.0;
         initial_state.timestamp = std::chrono::system_clock::now();
+        
+        // Pre-populate next_moves with exactly 2 moves from ideal path
+        // This is critical for collision detection to work properly
+        initial_state.next_moves.clear();
+        if (!ideal_path_.empty() && ideal_path_.size() >= 2) {
+            std::pair<int, int> first_move = ideal_path_[1]; // Next immediate move
+            std::pair<int, int> second_move = ideal_path_.size() >= 3 ? ideal_path_[2] : first_move;
+            
+            initial_state.next_moves.push_back(first_move);
+            initial_state.next_moves.push_back(second_move);
+            
+            RCLCPP_INFO(this->get_logger(), 
+                       "Agent %d initialized with next_moves: (%d,%d), (%d,%d)", 
+                       agent_id_, 
+                       first_move.first, first_move.second,
+                       second_move.first, second_move.second);
+        } else {
+            // No ideal path, stay at current position
+            std::pair<int, int> current_pos = {start_.first, start_.second};
+            initial_state.next_moves.push_back(current_pos);
+            initial_state.next_moves.push_back(current_pos);
+            
+            RCLCPP_WARN(this->get_logger(), 
+                       "Agent %d has no ideal path, staying at current position (%d,%d)", 
+                       agent_id_, start_.first, start_.second);
+        }
         
         db_->setState(agent_id_, initial_state);
         RCLCPP_INFO(this->get_logger(), "Agent %d state initialized in database", agent_id_);
@@ -113,37 +145,55 @@ private:
         AgentState current_state = db_->getState(agent_id_);
         current_state.current_tick = tick;
         current_state.timestamp = std::chrono::system_clock::now();
-        
-        // Debug logging for Agent 10
-        if (agent_id_ == 10) {
-            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: Starting tick %d, current position from DB: (%d,%d)", 
-                       tick, current_state.current_x, current_state.current_y);
-        }
-        
+         
         // Use BigTank algorithm to calculate next move
         AgentState new_state = bt::BigTank::calculate_next_move(current_state, ideal_path_, goal_, map_);
         
-        // Debug logging for Agent 10
-        if (agent_id_ == 10) {
-            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: After calculation, new position: (%d,%d)", 
-                       new_state.current_x, new_state.current_y);
-        }
-        
-        // Log movement information
-        if (new_state.current_x != current_state.current_x || new_state.current_y != current_state.current_y) {
-            RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
-                       agent_id_, current_state.current_x, current_state.current_y, 
-                       new_state.current_x, new_state.current_y, 
-                       new_state.force.first, new_state.force.second, tick);
-        } else if (!new_state.is_moving && !new_state.goal_reached) {
+        // Check if BigTank provided a valid next move
+        if (!new_state.next_moves.empty()) {
+            // Execute the move
+            std::pair<int, int> next_pos = new_state.next_moves[0];
+            
+            // Validate the move is within bounds and not blocked
+            if (next_pos.first >= 0 && next_pos.first < (int)map_[0].size() &&
+                next_pos.second >= 0 && next_pos.second < (int)map_.size() &&
+                map_[next_pos.second][next_pos.first] == 0) {
+                
+                // Update position
+                new_state.current_x = next_pos.first;
+                new_state.current_y = next_pos.second;
+                new_state.is_moving = true;
+                
+                // Log movement
+                RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
+                           agent_id_, current_state.current_x, current_state.current_y, 
+                           new_state.current_x, new_state.current_y, 
+                           new_state.force.first, new_state.force.second, tick);
+            } else {
+                // Invalid move, stay in place
+                new_state.current_x = current_state.current_x;
+                new_state.current_y = current_state.current_y;
+                new_state.is_moving = false;
+                RCLCPP_WARN(this->get_logger(), "Agent %d attempted invalid move to (%d,%d), staying at (%d,%d) at tick %d", 
+                           agent_id_, next_pos.first, next_pos.second, 
+                           current_state.current_x, current_state.current_y, tick);
+            }
+        } else {
+            // No move calculated, stay in place
+            new_state.current_x = current_state.current_x;
+            new_state.current_y = current_state.current_y;
+            new_state.is_moving = false;
             RCLCPP_WARN(this->get_logger(), "Agent %d blocked at (%d,%d), cannot move at tick %d", 
                        agent_id_, current_state.current_x, current_state.current_y, tick);
         }
         
         // Check if goal reached
-        if (new_state.goal_reached && !current_state.goal_reached) {
-            RCLCPP_INFO(this->get_logger(), "Agent %d REACHED GOAL at (%d,%d) at tick %d! Job %s completed.", 
-                       agent_id_, new_state.current_x, new_state.current_y, tick, new_state.job_id.c_str());
+        if (new_state.current_x == goal_.first && new_state.current_y == goal_.second) {
+            new_state.goal_reached = true;
+            if (!current_state.goal_reached) {
+                RCLCPP_INFO(this->get_logger(), "Agent %d REACHED GOAL at (%d,%d) at tick %d! Job %s completed.", 
+                           agent_id_, new_state.current_x, new_state.current_y, tick, new_state.job_id.c_str());
+            }
         }
         
         // Update state in database
@@ -164,6 +214,7 @@ private:
     int current_tick_;
     bool is_leader_;
     std::pair<int, int> start_;
+    int priority_;
     std::string job_id_;
     std::pair<int, int> goal_;
     std::vector<std::vector<int>> map_;

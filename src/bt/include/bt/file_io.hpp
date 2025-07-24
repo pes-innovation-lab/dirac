@@ -12,13 +12,13 @@ namespace bt {
 
 class FileIO {
 public:
-    // Given filename and agent_id, returns ((start_x, start_y), job_id, (goal_x, goal_y), is_leader) for that agent
-    static std::tuple<std::pair<int, int>, std::string, std::pair<int, int>, bool>
+    // Given filename and agent_id, returns ((start_x, start_y), priority, job_id, (goal_x, goal_y), is_leader) for that agent
+    static std::tuple<std::pair<int, int>, int, std::string, std::pair<int, int>, bool>
     get_agent_info(const std::string& filename, int agent_id) {
         std::ifstream file(filename);
         if (!file.is_open()) {
             std::cerr << "Failed to open agents file: " << filename << std::endl;
-            return {{-1, -1}, "", {-1, -1}, false};
+            return {{-1, -1}, 1, "", {-1, -1}, false};
         }
         std::string line;
         std::getline(file, line); // skip header
@@ -33,15 +33,15 @@ public:
                 bool is_leader;
                 std::getline(ss, token, ','); start_x = std::stoi(token);
                 std::getline(ss, token, ','); start_y = std::stoi(token);
-                std::getline(ss, token, ','); priority = std::stoi(token); // skip for now
+                std::getline(ss, token, ','); priority = std::stoi(token);
                 std::getline(ss, token, ','); job_id = token;
                 std::getline(ss, token, ','); goal_x = std::stoi(token);
                 std::getline(ss, token, ','); goal_y = std::stoi(token);
                 std::getline(ss, token, ','); is_leader = (token == "true" || token == "1");
-                return {{start_x, start_y}, job_id, {goal_x, goal_y}, is_leader};
+                return {{start_x, start_y}, priority, job_id, {goal_x, goal_y}, is_leader};
             }
         }
-        return {{-1, -1}, "", {-1, -1}, false}; // not found
+        return {{-1, -1}, 1, "", {-1, -1}, false}; // not found
     }
 
     // Get all agent IDs from the CSV file

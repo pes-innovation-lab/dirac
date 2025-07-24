@@ -1,0 +1,378 @@
+// Constants and thresholds for the algorithm
+const int MAX_RECOVERY_THRESHOLD; // Max attempts to follow recovery path before replanning
+const int MAX_STUCK_THRESHOLD;    // Max ticks an agent can be stuck before taking drastic measures
+const double BASE_FORCE;         // Base force value for movement calculations
+const int CONFLICT_THRESHOLD;      // Number of conflicts in a region before marking it for avoidance
+const int MIN_X;                   // Minimum X boundary of the grid
+const int MIN_Y;                   // Minimum Y boundary of the grid
+const int MAX_X;                 // Maximum X boundary of the grid - adjust based on environment
+const int MAX_Y;                 // Maximum Y boundary of the grid - adjust based on environment
+
+// Assume 'self' refers to the current agent's state/variables
+// 'other' refers to another agent's state from the agent_state_db
+// 'agent_state_db' is the local copy of other agents' states
+// 'run_A_star' is a function that recalculates the ideal path
+// 'log' is a logging function
+// chain_force: {double, double} (tuple for x, y components of force)
+// recovery: list of {int, int} (list of coordinates for recovery path)
+// registered_path: list of {int, int} (list of coordinates of the actual path taken)
+// last_position: {int, int} (previous position to detect being stuck)
+
+bool collision;
+int stuck_counter;
+double force_multiplier;
+int recovery_counter; 
+
+
+Algorithm BigTank:
+    collision = false; // Reset collision status for the current tick
+    if (last_position == null) // Check if this is the very first run
+        initialize();
+
+    // Check for deadlock and update stuck counter and force multiplier
+    check_for_deadlock();
+
+    // Main algorithm flow
+    if (collision == false && recovery != empty)
+        // Try to return to the original path using recovery points
+        follow_recovery_path();
+        // Check for excessive recovery to trigger A* re-planning for *this* agent
+        if (recovery_counter >= MAX_RECOVERY_THRESHOLD)
+            recalculate_ideal_path(); // Trigger A* re-planning
+    else
+        // Check for static obstacles first
+        if (isBlocked(self.next)) {
+            log("Agent " + self.agent_id + " path blocked by static obstacle");
+            recalculate_ideal_path(); // Need a new path around obstacle
+        }
+        // Then check for collisions with other agents
+        else {
+            collision_result = isCollision(self, self.next);
+            if (collision_result.first) { // If collision detected
+                collision = true;
+                other_agent = collision_result.second;
+                collision_type = collision_result.third;
+                
+                log("Agent " + self.agent_id + " detected " + collision_type + " collision with agent " + other_agent.agent_id);
+                resolve_conflict(other_agent);
+            }
+    else if (!collision) {
+        // No recovery needed and no collision detected, proceed with normal movement
+        // Ensure ideal_path is not empty before attempting to use .next and .current
+        if (self.ideal_path.empty()) {
+            // This case should ideally not happen if A* is run at start and on recalculation
+            // but as a fallback, generate a random move toward goal
+            log("Warning: Agent " + self.agent_id + " ideal_path is empty in normal movement. Moving randomly toward goal.");
+            force = approximate_direction_to_goal(self.current, self.goal);
+            ForceBasedMovement(force);
+        } else {
+            force = self.ideal_path.next - self.ideal_path.current;
+            ForceBasedMovement(force);
+        }
+    }
+
+fn ForceBasedMovement(force_vector):
+    if (abs(force_vector.first) > abs(force_vector.second))
+        next_move = {self.current.first + (force_vector.first > 0 ? 1 : -1), self.current.second};
+    else
+        next_move = {self.current.first, self.current.second + (force_vector.second > 0 ? 1 : -1)};
+    
+    // Append the calculated next move to the registered path for this tick
+    registered_path.append(next_move);
+    
+    self.next = next_move; 
+
+fn resolve_conflict(other_agent_in_conflict): 
+    // Update conflict regions tracking to help future path planning
+    update_conflict_regions(self.next);
+    
+    // Check if the agent can proceed with adjusted force
+    // (Not checking isBlocked here as we already know there's a collision)
+        // Log current location for recovery
+        recover = self.current;
+        recovery.append(recover);
+
+        // Apply force from other agent upon itself
+        application_force = (self.ideal_path.next - self.ideal_path.current) * BASE_FORCE * self.priority;
+        other_application_force = (other_agent_in_conflict.ideal_path.next - other_agent_in_conflict.ideal_path.current) * BASE_FORCE * other_agent_in_conflict.priority;
+        
+        force_on_self = application_force + other_application_force;
+        chain_force += force_on_self; // Accumulate chain force
+
+        // Move based on combined force - this will determine the new `next_move` for this tick
+        ForceBasedMovement(chain_force); // Recursive call to determine a new move based on adjusted force
+    else // `isBlocked` is true, implying the ideal path is blocked by something static or unresolvable by force
+        // Handle case where ideal path is blocked or leads to a persistent conflict
+        // calculate_force_based_on_conflict assumes two agents, so we need 'other_agent_in_conflict'
+        force_for_this_tick = calculate_force_based_on_conflict(self, other_agent_in_conflict);
+        
+        if (self.ideal_path.empty()) // If ideal path is empty, random move
+            next_move = select_random_cell(self, other_agent_in_conflict);
+            registered_path.append(next_move);
+            // Update self.next based on this random move
+            self.next = next_move;
+        else
+            // Move based on accumulated chain force - this will determine the new `next_move` for this tick
+            ForceBasedMovement(self.chain_force); // Recursive call
+
+fn follow_recovery_path():
+    // First check if the next move is blocked by obstacles
+    if (isBlocked(self.next)) 
+        // Static obstacle blocking
+        log("Agent " + self.agent_id + " recovery path blocked by static obstacle");
+        recalculate_ideal_path(); // Need to recalculate path
+        return;
+    
+    // Then check for collisions with other agents
+    collision_result = isCollision(self, self.next);
+    if (collision_result.first) // If collision detected
+        collision = true;
+        other_agent = collision_result.second;
+        collision_type = collision_result.third;
+        
+        log("Agent " + self.agent_id + " detected " + collision_type + " collision with agent " + other_agent.agent_id + " during recovery");
+        resolve_conflict(other_agent);
+        return;
+    else
+        // No conflict, proceed with recovery
+        collision = false;
+        
+        // Return to original path by following recovery points in reverse order
+        if (recovery != empty && self.current != last(recovery)) // Using self.current for consistency
+            next_move = recovery.pop();
+            registered_path.append(next_move);
+            recovery_counter += 1; // Increment counter when a recovery move is made
+            self.next = next_move; // Update self.next with the recovery move
+        
+        // Once we've returned to the original path, clear recovery
+        if (recovery != empty && self.current == last(recovery)) // Check if we reached the last recovery point
+            recovery.clear();
+            recovery_counter = 0; // Reset counter when recovery is successfully completed
+            // Also reset stuck counter and force multiplier upon successful recovery
+            stuck_counter = 0;
+            force_multiplier = 1.0;
+
+fn calculate_force_based_on_conflict(self_agent, other_agent): // Renamed parameters for clarity
+    // Apply force multiplier based on stuck counter
+    // Assuming BASE_FORCE is a constant
+    application_force = (self_agent.ideal_path.next - self_agent.ideal_path.current) * BASE_FORCE * self_agent.priority * self_agent.force_multiplier;
+    other_application_force = (other_agent.ideal_path.next - other_agent.ideal_path.current) * BASE_FORCE * other_agent.priority * other_agent.force_multiplier;
+    
+    // Accumulate forces from multiple agents using chain_force (modifies self_agent's chain_force)
+    self_agent.chain_force += application_force + other_application_force;
+    
+    return self_agent.chain_force;
+
+fn select_random_cell(self_agent, other_agent): // Renamed parameters
+    possible_moves = [
+        {self_agent.current.first + 1, self_agent.current.second},
+        {self_agent.current.first - 1, self_agent.current.second},
+        {self_agent.current.first, self_agent.current.second + 1},
+        {self_agent.current.first, self_agent.current.second - 1}
+    ];
+    // Filter out moves that conflict with other agent's current or future positions
+    // This assumes other_agent.current and other_agent.next are valid and accessible
+    possible_moves = filter(possible_moves, move => move != other_agent.current && move != other_agent.next);
+    
+    // If no non-conflicting moves, allow any move (potentially leading to a conflict)
+    if (possible_moves.empty()) {
+        possible_moves = [
+            {self_agent.current.first + 1, self_agent.current.second},
+            {self_agent.current.first - 1, self_agent.current.second},
+            {self_agent.current.first, self_agent.current.second + 1},
+            {self_agent.current.first, self_agent.current.second - 1}
+        ];
+        // Filter only by grid boundaries (assuming MIN/MAX X/Y are defined)
+        possible_moves = filter(possible_moves, move => 
+            move.first >= MIN_X && move.first <= MAX_X &&
+            move.second >= MIN_Y && move.second <= MAX_Y
+        );
+    }
+    
+    return random(possible_moves);
+
+fn initialize():
+    collision = false // Local variable
+    chain_force = {0, 0} // Local variable
+    recovery = [] // Local variable
+    registered_path = [] // Local variable
+    stuck_counter = 0 // Local variable
+    last_position = {-1, -1}  // Invalid initial position, local variable
+    force_multiplier = 1.0 // Local variable
+    recovery_counter = 0 // NEW: Local recovery counter initialized to zero
+
+fn check_for_deadlock():
+    // Check if agent has moved since last tick
+    // self.current is from AgentState, last_position is local to algorithm
+    if (self.current == last_position)
+        // Agent hasn't moved, increment stuck counter
+        stuck_counter += 1 // Local variable
+        
+        // Increase force multiplier based on stuck count and priority
+        // self.priority is from AgentState
+        force_multiplier = pow(self.priority, stuck_counter) // Update local force_multiplier
+        
+        // Update the force_multiplier in AgentState so it's available to other functions
+        // and visible to other agents (important for force calculations)
+        self.force_multiplier = force_multiplier;
+        
+        // Log the deadlock (self.agent_id from AgentState)
+        if (stuck_counter % 5 == 0)
+            log("Agent " + self.agent_id + " is stuck for " + stuck_counter + " ticks, force multiplier: " + force_multiplier)
+        
+        // If stuck for too long, take drastic measures
+        if (stuck_counter > MAX_STUCK_THRESHOLD)
+            // Try a completely random move regardless of other agents
+            next_move = select_any_adjacent_cell(); // This returns a single next_move
+            registered_path.append(next_move);
+            self.next = next_move; // Update self.next based on this random move
+            
+            // Reset chain force to break out of force-based patterns
+            reset_chain_force();
+            // Also reset recovery related counters as this is a drastic measure
+            recovery.clear();
+            recovery_counter = 0;
+            
+    else
+        // Agent has moved, reset stuck counter
+        stuck_counter = 0 // Local variable
+        
+        // Reset force multiplier to normal
+        force_multiplier = 1.0 // Local variable
+        
+        // Update the force_multiplier in AgentState
+        self.force_multiplier = force_multiplier;
+    
+    // Update last position for next tick (last_position is local)
+    last_position = self.current
+
+fn reset_chain_force():
+    chain_force = {0, 0} // Resets local chain_force
+
+fn select_any_adjacent_cell():
+    // Return any valid adjacent cell, ignoring other agents
+    possible_moves = [
+        {self.current.first + 1, self.current.second},
+        {self.current.first - 1, self.current.second},
+        {self.current.first, self.current.second + 1},
+        {self.current.first, self.current.second - 1}
+    ]
+    
+    // Filter only by grid boundaries (assuming MIN/MAX X/Y are defined)
+    possible_moves = filter(possible_moves, move => 
+        move.first >= MIN_X && move.first <= MAX_X &&
+        move.second >= MIN_Y && move.second <= MAX_Y
+    )
+    
+    // Return a random move, or null/error if no valid moves (shouldn't happen in a navigable grid)
+    if (possible_moves.empty()) {
+        // Fallback: This indicates an agent is completely trapped, even from static obstacles
+        log("Error: Agent " + self.agent_id + " is completely trapped and cannot select any adjacent cell.");
+        return self.current; // Agent stays put
+    }
+    return random(possible_moves);
+
+fn recalculate_ideal_path():
+    // This function operates on *this* agent's ideal_path
+    log("Agent " + self.agent_id + " recalculating ideal path due to excessive recovery.");
+    
+    // Assuming run_A_star takes current position, goal, and the shared agent_state_db
+    // to potentially consider other agents as dynamic obstacles.
+    // Add a small penalty for cells near the current conflict area
+    self.ideal_path = run_A_star(self.current, self.goal, agent_state_db, current_conflict_regions); 
+    
+    // Reset local state related to recovery and being stuck
+    recovery.clear(); // Clear any existing recovery points
+    recovery_counter = 0; // Reset local recovery counter
+    stuck_counter = 0; // Also reset local stuck counter as this is a major re-planning
+    force_multiplier = 1.0; // Reset local force multiplier
+    chain_force = {0,0}; // Reset local chain force as a new path means new dynamics.
+    
+    // Update the force_multiplier in AgentState
+    self.force_multiplier = force_multiplier;
+    
+    // Broadcast the recalculated path to other agents
+    // This allows them to potentially adjust their planning
+    broadcast_updated_path(self.agent_id, self.ideal_path);
+    
+fn approximate_direction_to_goal(current, goal):
+    // Calculate a simple direction vector toward the goal
+    dx = goal.first - current.first;
+    dy = goal.second - current.second;
+    
+    // Normalize to prevent excessive force
+    magnitude = sqrt(dx*dx + dy*dy);
+    if (magnitude > 0) {
+        dx = dx / magnitude;
+        dy = dy / magnitude;
+    }
+    
+    return {dx, dy};
+
+// Helper function to check if a cell is blocked by static obstacles or is outside grid boundaries
+fn isBlocked(position_to_check):
+    // Check if position is outside grid boundaries
+    if (position_to_check.first < MIN_X || position_to_check.first > MAX_X ||
+        position_to_check.second < MIN_Y || position_to_check.second > MAX_Y)
+        return true;
+    
+    // Check for static obstacles in the map
+    if (map[position_to_check.first][position_to_check.second] == 1)
+        return true;
+    
+    // Position is not blocked by obstacles
+    return false;
+
+// Helper function to check if a move would result in a collision with another agent
+fn isCollision(self_agent, position_to_check):
+    // Check for other agents that might be at this position or moving to this position
+    for each agent_id, agent_state in agent_state_db
+        // Skip self when checking
+        if (agent_id != self_agent.agent_id) 
+            // Vertex collision - both agents plan to occupy the same position
+            if (agent_state.next == position_to_check)
+                return {true, agent_state, "vertex"};
+            
+            // Swap collision - agents exchange positions
+            if (agent_state.current == position_to_check && agent_state.next == self_agent.current)
+                return {true, agent_state, "swap"};
+            
+            // Edge collision - agents cross the same edge in opposite directions
+            if (self_agent.current == agent_state.next && self_agent.next == agent_state.current)
+                return {true, agent_state, "edge"};
+    
+    // No collision detected
+    return {false, null, "none"};
+
+fn broadcast_updated_path(agent_id, path):
+    // Broadcast the updated path to all other agents
+    // This could be implemented using the messaging system
+    // or by updating a shared data structure accessible to all agents
+    log("Agent " + agent_id + " broadcasting updated path to all agents");
+    
+    // Actual implementation would depend on the system architecture
+    // Here we just assume it updates the agent_state_db
+    for each other_agent_id in agent_state_db
+        if (other_agent_id != agent_id)
+            // Notify other agents about the new path
+            notify_agent_of_path_change(other_agent_id, agent_id, path);
+
+// Keep track of regions where conflicts frequently occur
+// This helps to penalize these regions in future path planning
+fn update_conflict_regions(position):
+    if (conflict_regions.contains(position))
+        conflict_regions[position] += 1;
+    else
+        conflict_regions[position] = 1;
+    
+    // If a region has too many conflicts, mark it for avoidance in future planning
+    if (conflict_regions[position] > CONFLICT_THRESHOLD)
+        current_conflict_regions.add(position);
+
+// Periodically clear old conflict regions to allow paths to normalize over time
+fn clear_old_conflict_regions():
+    for each position, count in conflict_regions
+        conflict_regions[position] -= 1;
+        if (conflict_regions[position] <= 0)
+            conflict_regions.remove(position);
+            current_conflict_regions.remove(position);
