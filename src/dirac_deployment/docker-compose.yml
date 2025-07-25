@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  dirac_agent:
+    container_name: dirac-${AGENT_ID:-1}
+    hostname: dirac-${AGENT_ID:-1}
+    build:
+      context: ..
+      dockerfile: dirac_deployment/Dockerfile
+      cache_from:
+        - dirac-ros2:latest
+    image: dirac-ros2:latest
+    user: dirac
+    stdin_open: true
+    tty: true
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - ROS_DOMAIN_ID=0
+      - AGENT_ID=${AGENT_ID:-1}
+      - TURTLESIM=${TURTLESIM:-false}
+      - NUM_TURTLES=${NUM_TURTLES:-0}
+      - QT_X11_NO_MITSHM=1
+      - XAUTHORITY=${XAUTH:-/home/dirac/.Xauthority}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTH:-$HOME/.Xauthority}:/home/dirac/.Xauthority:rw
+    command: >
+      bash -c "
+      echo \"Container starting with Agent ID: \$$AGENT_ID, TURTLESIM: \$$TURTLESIM, NUM_TURTLES: \$$NUM_TURTLES\";
+      source /opt/ros/humble/setup.bash &&
+      source /ros2_ws/install/setup.bash &&
+      ros2 launch dirac_bringup dirac_bringup.launch.py agent_id:=\$$AGENT_ID turtlesim:=\$$TURTLESIM num_turtles:=\$$NUM_TURTLES"
+    networks:
+      - ros_network
+
+networks:
+  ros_network:
+    external: true
+    name: dirac_ros_network
