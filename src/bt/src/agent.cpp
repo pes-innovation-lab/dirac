@@ -5,6 +5,7 @@
 #include <thread>
 #include <chrono>
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/int32.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "bt/file_io.hpp"
 #include "bt/agent_state_db.hpp"
@@ -57,6 +58,10 @@ public:
 
         // Create StateUpdater AFTER agent state is initialized
         state_updater_ = std::make_unique<bt::StateUpdater>(this, agent_id_, db_, total_agents, agents_csv_path);
+
+        // Initialize command publisher for this agent
+        std::string command_topic = "agent_command_" + std::to_string(agent_id_);
+        command_pub_ = this->create_publisher<std_msgs::msg::Int32>(command_topic, 10);
 
         // Set up tick change callback
         state_updater_->set_tick_change_callback([this](int new_tick) {
@@ -140,7 +145,7 @@ private:
 
     void process_tick(int tick) {
         // Add delay to slow down tick processing for observation
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
         
         AgentState current_state = db_->getState(agent_id_);
         current_state.current_tick = tick;
@@ -165,6 +170,30 @@ private:
                 
                 // Set is_moving based on whether the next position is different from current position
                 new_state.is_moving = (next_pos.first != current_state.current_x || next_pos.second != current_state.current_y);
+                
+                // Determine direction and publish command if moving
+                if (new_state.is_moving) {
+                    int direction = 0; // 0 = no movement, 1 = right, 2 = up, 3 = left, 4 = down
+                    int dx = next_pos.first - current_state.current_x;
+                    int dy = next_pos.second - current_state.current_y;
+                    
+                    if (dx > 0) {
+                        direction = 4; // Right
+                    } else if (dy < 0) {
+                        direction = 1; // Up (assuming y decreases going up)
+                    } else if (dx < 0) {
+                        direction = 3; // Left
+                    } else if (dy > 0) {
+                        direction = 2; // Down (assuming y increases going down)
+                    }
+                    
+                    // Publish direction command
+                    std_msgs::msg::Int32 command_msg;
+                    command_msg.data = direction;
+                    command_pub_->publish(command_msg);
+                    
+                    RCLCPP_INFO(this->get_logger(), "Agent %d published direction command: %d", agent_id_, direction);
+                }
                 
                 // Log movement
                 if (new_state.is_moving) {
@@ -229,6 +258,7 @@ private:
     std::vector<std::pair<int, int>> ideal_path_;
     std::shared_ptr<bt::AgentStateDB> db_;
     std::unique_ptr<bt::StateUpdater> state_updater_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr command_pub_;
 };
 
 int main(int argc, char **argv)
