@@ -5,7 +5,7 @@
 #include <thread>
 #include <chrono>
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/int32.hpp"
+#include "dirac_msgs/msg/agent_command.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "bt/file_io.hpp"
 #include "bt/agent_state_db.hpp"
@@ -61,7 +61,7 @@ public:
 
         // Initialize command publisher for this agent
         std::string command_topic = "agent_command_" + std::to_string(agent_id_);
-        command_pub_ = this->create_publisher<std_msgs::msg::Int32>(command_topic, 10);
+        command_pub_ = this->create_publisher<dirac_msgs::msg::AgentCommand>(command_topic, 10);
 
         // Set up tick change callback
         state_updater_->set_tick_change_callback([this](int new_tick) {
@@ -146,7 +146,6 @@ private:
     void process_tick(int tick) {
         // Add delay to slow down tick processing for observation
         std::this_thread::sleep_for(std::chrono::seconds(2));
-        
         AgentState current_state = db_->getState(agent_id_);
         current_state.current_tick = tick;
         current_state.timestamp = std::chrono::system_clock::now();
@@ -188,8 +187,8 @@ private:
                     }
                     
                     // Publish direction command
-                    std_msgs::msg::Int32 command_msg;
-                    command_msg.data = direction;
+                    dirac_msgs::msg::AgentCommand command_msg;
+                    command_msg.direction = direction;
                     command_pub_->publish(command_msg);
                     
                     RCLCPP_INFO(this->get_logger(), "Agent %d published direction command: %d", agent_id_, direction);
@@ -258,7 +257,7 @@ private:
     std::vector<std::pair<int, int>> ideal_path_;
     std::shared_ptr<bt::AgentStateDB> db_;
     std::unique_ptr<bt::StateUpdater> state_updater_;
-    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr command_pub_;
+    rclcpp::Publisher<dirac_msgs::msg::AgentCommand>::SharedPtr command_pub_;
 };
 
 int main(int argc, char **argv)

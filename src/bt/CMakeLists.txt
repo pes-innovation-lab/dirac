@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(dirac_msgs REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 
 add_executable(agent src/agent.cpp src/path_planner.cpp src/big_tank.cpp)
@@ -20,6 +21,7 @@ ament_target_dependencies(
   agent
   "rclcpp"
   "std_msgs"
+  "dirac_msgs"
   "ament_index_cpp"
 )
 

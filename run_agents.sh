@@ -3,7 +3,7 @@
 # Build the workspace
 echo "Building the workspace..."
 cd /home/venator/pil/dirac/bt_ws
-colcon build --packages-select bt
+colcon build --packages-select dirac_msgs bt
 
 # Check if build was successful
 if [ $? -ne 0 ]; then
