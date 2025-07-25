@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(dirac_msgs REQUIRED)
+find_package(turtlesim REQUIRED)
 
 # Create library
 add_library(navigation_controller SHARED
@@ -21,6 +22,7 @@ add_library(navigation_controller SHARED
   src/strategies/right_movement.cpp
   src/strategies/movement_strategy_factory.cpp
   src/publishers/publisher_manager.cpp
+  src/publishers/grid_pose_publisher.cpp
   src/config/navigation_config.cpp
 )
 
@@ -28,6 +30,7 @@ ament_target_dependencies(navigation_controller
   rclcpp 
   geometry_msgs 
   dirac_msgs
+  turtlesim
 )
 
 # Include directories
@@ -45,6 +48,15 @@ ament_target_dependencies(discrete_navigation_controller
 )
 target_link_libraries(discrete_navigation_controller navigation_controller)
 
+# Add grid pose publisher executable
+add_executable(grid_pose_publisher src/grid_pose_publisher_node.cpp)
+ament_target_dependencies(grid_pose_publisher
+  rclcpp
+  geometry_msgs
+  turtlesim
+)
+target_link_libraries(grid_pose_publisher navigation_controller)
+
 # Install targets
 install(TARGETS
   navigation_controller
@@ -57,6 +69,7 @@ install(TARGETS
 
 install(TARGETS
   discrete_navigation_controller
+  grid_pose_publisher
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -77,7 +90,7 @@ install(DIRECTORY launch/
 
 # Export targets
 ament_export_targets(navigation_controllerTargets HAS_LIBRARY_TARGET)
-ament_export_dependencies(rclcpp geometry_msgs dirac_msgs)
+ament_export_dependencies(rclcpp geometry_msgs dirac_msgs turtlesim)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
