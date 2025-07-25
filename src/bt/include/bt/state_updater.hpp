@@ -30,12 +30,12 @@ public:
         RCLCPP_INFO(node_->get_logger(), "StateUpdater initialized for Agent %d (Leader: %s)", 
                     agent_id_, is_leader_ ? "YES" : "NO");
         
-        db_update_pub_ = node_->create_publisher<std_msgs::msg::String>("db_update", 10);
-        state_ack_pub_ = node_->create_publisher<std_msgs::msg::String>("state_ack", 10);
-        global_tick_pub_ = node_->create_publisher<std_msgs::msg::String>("global_tick", 10);
+        db_update_pub_ = node_->create_publisher<std_msgs::msg::String>("db_update", 100);
+        state_ack_pub_ = node_->create_publisher<std_msgs::msg::String>("state_ack", 100);
+        global_tick_pub_ = node_->create_publisher<std_msgs::msg::String>("global_tick", 100);
         
         db_update_sub_ = node_->create_subscription<std_msgs::msg::String>(
-            "db_update", 10,
+            "db_update", 100,
             [this](const std_msgs::msg::String::SharedPtr msg) {
                 // Parse CSV string to AgentState (all fields)
                 std::stringstream ss(msg->data);
@@ -138,7 +138,7 @@ public:
         if (is_leader_) {
             RCLCPP_INFO(node_->get_logger(), "Agent %d is LEADER - subscribing to state acknowledgments", agent_id_);
             state_ack_sub_ = node_->create_subscription<std_msgs::msg::String>(
-                "state_ack", 10,
+                "state_ack", 100,
                 [this](const std_msgs::msg::String::SharedPtr msg) {
                     // Parse: "agent_id,tick"
                     std::stringstream ss(msg->data);
@@ -177,7 +177,7 @@ public:
 
         // Subscribe to global tick updates
         global_tick_sub_ = node_->create_subscription<std_msgs::msg::String>(
-            "global_tick", 10,
+            "global_tick", 100,
             [this](const std_msgs::msg::String::SharedPtr msg) {
                 int new_tick = std::stoi(msg->data);
                 if (new_tick > current_global_tick_) {

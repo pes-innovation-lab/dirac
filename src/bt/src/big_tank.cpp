@@ -53,7 +53,7 @@ void BigTankAlgorithm::execute_tick() {
         
         // Clear next_moves to indicate no further movement
         AgentState updated_state = self_state;
-        updated_state.next_moves.clear();
+        updated_state.next_moves = self_state.next_moves; // Preserve next_moves for consistency
         updated_state.force = {0.0, 0.0};  // No force needed at goal
         agent_state_db_->setState(agent_id_, updated_state);
         return;

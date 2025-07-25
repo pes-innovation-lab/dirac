@@ -162,13 +162,21 @@ private:
                 // Update position
                 new_state.current_x = next_pos.first;
                 new_state.current_y = next_pos.second;
-                new_state.is_moving = true;
+                
+                // Set is_moving based on whether the next position is different from current position
+                new_state.is_moving = (next_pos.first != current_state.current_x || next_pos.second != current_state.current_y);
                 
                 // Log movement
-                RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
-                           agent_id_, current_state.current_x, current_state.current_y, 
-                           new_state.current_x, new_state.current_y, 
-                           new_state.force.first, new_state.force.second, tick);
+                if (new_state.is_moving) {
+                    RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
+                               agent_id_, current_state.current_x, current_state.current_y, 
+                               new_state.current_x, new_state.current_y, 
+                               new_state.force.first, new_state.force.second, tick);
+                } else {
+                    RCLCPP_INFO(this->get_logger(), "Agent %d staying at (%d,%d) with force (%.2f,%.2f) at tick %d", 
+                               agent_id_, new_state.current_x, new_state.current_y, 
+                               new_state.force.first, new_state.force.second, tick);
+                }
             } else {
                 // Invalid move, stay in place
                 new_state.current_x = current_state.current_x;
