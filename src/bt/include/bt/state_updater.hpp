@@ -114,8 +114,16 @@ public:
                 } else {
                     state.timestamp = std::chrono::system_clock::now();
                 }
-                // Track received agent IDs for this tick
+                
+                // TICK VALIDATION: Only process messages for current tick
                 int tick = state.current_tick;
+                if (tick != current_global_tick_) {
+                    RCLCPP_DEBUG(node_->get_logger(), "Agent %d ignoring state update from agent %d for tick %d (current: %d)", 
+                                agent_id_, state.agent_id, tick, current_global_tick_);
+                    return;
+                }
+                
+                // Track received agent IDs for this tick
                 received_agents_by_tick_[tick].insert(state.agent_id);
                 
                 // Only update state if it's not our own agent (preserve local agent's leadership)
@@ -148,28 +156,27 @@ public:
                     std::getline(ss, token, ',');
                     int ack_tick = std::stoi(token);
                     
-                    // Only process acks for the current tick - ignore old acks
-                    if (ack_tick == current_global_tick_) {
-                        acks_by_tick_[ack_tick].insert(ack_agent_id);
-                        
-                        RCLCPP_DEBUG(node_->get_logger(), "Leader received ack from agent %d for current tick %d (%zu/%zu)", 
-                                    ack_agent_id, ack_tick, acks_by_tick_[ack_tick].size(), all_agent_ids_.size());
-                        
-                        // Only advance when all agents have acknowledged the current tick
-                        if (acks_by_tick_[ack_tick].size() == all_agent_ids_.size()) {
-                            RCLCPP_INFO(node_->get_logger(), "Leader: All %zu agents acknowledged current tick %d, advancing global tick", 
-                                       all_agent_ids_.size(), ack_tick);
-                            
-                            // Clear old tick data to prevent memory buildup
-                            acks_by_tick_.erase(ack_tick);
-                            received_agents_by_tick_.erase(ack_tick);
-                            // Don't clear acks_sent_for_tick_ here - let it accumulate to prevent re-sending
-                            
-                            advance_global_tick();
-                        }
-                    } else {
-                        RCLCPP_DEBUG(node_->get_logger(), "Leader ignoring ack from agent %d for old tick %d (current: %d)", 
+                    // STRICT TICK VALIDATION: Only process acks for the current tick
+                    if (ack_tick != current_global_tick_) {
+                        RCLCPP_DEBUG(node_->get_logger(), "Leader rejecting ack from agent %d for tick %d (current: %d)", 
                                     ack_agent_id, ack_tick, current_global_tick_);
+                        return;
+                    }
+                    
+                    acks_by_tick_[ack_tick].insert(ack_agent_id);
+                    
+                    RCLCPP_DEBUG(node_->get_logger(), "Leader received ack from agent %d for current tick %d (%zu/%zu)", 
+                                ack_agent_id, ack_tick, acks_by_tick_[ack_tick].size(), all_agent_ids_.size());
+                    
+                    // Only advance when all agents have acknowledged the current tick
+                    if (acks_by_tick_[ack_tick].size() == all_agent_ids_.size()) {
+                        RCLCPP_INFO(node_->get_logger(), "Leader: All %zu agents acknowledged current tick %d, advancing global tick", 
+                                   all_agent_ids_.size(), ack_tick);
+                        
+                        // BUFFER PURGING: Clear all tick data before advancing
+                        purge_tick_buffers(ack_tick);
+                        
+                        advance_global_tick();
                     }
                 }
             );
@@ -181,7 +188,12 @@ public:
             [this](const std_msgs::msg::String::SharedPtr msg) {
                 int new_tick = std::stoi(msg->data);
                 if (new_tick > current_global_tick_) {
+                    int old_tick = current_global_tick_;
                     current_global_tick_ = new_tick;
+                    
+                    // BUFFER PURGING: Clear all data for previous ticks when advancing
+                    purge_tick_buffers(old_tick);
+                    
                     // Notify agent of tick change
                     if (tick_change_callback_) {
                         tick_change_callback_(current_global_tick_);
@@ -198,17 +210,6 @@ public:
                 if (own_state_written_for_tick_[current_global_tick_]) {
                     RCLCPP_DEBUG(node_->get_logger(), "Agent %d republishing state for tick %d", agent_id_, current_global_tick_);
                     maybe_write_own_state_immediately(current_global_tick_);
-                }
-                
-                // Clean up old acks_sent_for_tick_ entries to prevent memory buildup
-                // Keep only recent ticks (current and last 5)
-                auto it = acks_sent_for_tick_.begin();
-                while (it != acks_sent_for_tick_.end()) {
-                    if (*it < current_global_tick_ - 5) {
-                        it = acks_sent_for_tick_.erase(it);
-                    } else {
-                        ++it;
-                    }
                 }
             }
         );
@@ -341,6 +342,51 @@ private:
             RCLCPP_DEBUG(node_->get_logger(), "Agent %d not ready for ACK on tick %d (received:%zu/%zu agent states)", 
                         agent_id_, tick, received_agents_by_tick_[tick].size(), all_agent_ids_.size());
         }
+    }
+
+    void purge_tick_buffers(int completed_tick) {
+        // Clear all data structures for the completed tick and any older ticks
+        RCLCPP_DEBUG(node_->get_logger(), "Agent %d purging buffers for tick %d and older", agent_id_, completed_tick);
+        
+        // Remove completed and older tick data
+        auto acks_it = acks_by_tick_.begin();
+        while (acks_it != acks_by_tick_.end()) {
+            if (acks_it->first <= completed_tick) {
+                acks_it = acks_by_tick_.erase(acks_it);
+            } else {
+                ++acks_it;
+            }
+        }
+        
+        auto received_it = received_agents_by_tick_.begin();
+        while (received_it != received_agents_by_tick_.end()) {
+            if (received_it->first <= completed_tick) {
+                received_it = received_agents_by_tick_.erase(received_it);
+            } else {
+                ++received_it;
+            }
+        }
+        
+        auto written_it = own_state_written_for_tick_.begin();
+        while (written_it != own_state_written_for_tick_.end()) {
+            if (written_it->first <= completed_tick) {
+                written_it = own_state_written_for_tick_.erase(written_it);
+            } else {
+                ++written_it;
+            }
+        }
+        
+        // Keep only current tick for acks_sent_for_tick_ to prevent re-sending
+        auto sent_it = acks_sent_for_tick_.begin();
+        while (sent_it != acks_sent_for_tick_.end()) {
+            if (*sent_it < current_global_tick_) {
+                sent_it = acks_sent_for_tick_.erase(sent_it);
+            } else {
+                ++sent_it;
+            }
+        }
+        
+        RCLCPP_DEBUG(node_->get_logger(), "Agent %d buffer purging complete", agent_id_);
     }
 
     rclcpp::Node* node_;

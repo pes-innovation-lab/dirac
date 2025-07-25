@@ -87,6 +87,8 @@ public:
     // Collision detection
     bool is_blocked(const std::pair<int, int>& position);
     CollisionResult is_collision(const std::pair<int, int>& intended_position);
+    bool is_valid_move(const std::pair<int, int>& from, const std::pair<int, int>& to);
+    bool is_move_within_manhattan_distance(const std::pair<int, int>& from, const std::pair<int, int>& to, int max_distance = 1);
     
     // Utility functions
     void reset_chain_force();

@@ -168,9 +168,32 @@ void BigTankAlgorithm::initialize() {
                 collision_ = true;
                 resolve_conflict(collision_result.other_agent);
             } else {
-                // No collision, proceed with normal initialization
-                updated_state.next_moves.push_back(intended_first_move);
-                updated_state.next_moves.push_back(intended_second_move); // Always add second move
+                // Validate moves before adding them to next_moves
+                std::pair<int, int> current_pos = {self_state.current_x, self_state.current_y};
+                
+                if (is_valid_move(current_pos, intended_first_move)) {
+                    updated_state.next_moves.push_back(intended_first_move);
+                    
+                    // Validate second move as well
+                    if (is_valid_move(intended_first_move, intended_second_move)) {
+                        updated_state.next_moves.push_back(intended_second_move);
+                    } else {
+                        // If second move is invalid, stay at first move position
+                        updated_state.next_moves.push_back(intended_first_move);
+                        RCLCPP_WARN(rclcpp::get_logger("BigTank"), 
+                                   "Agent %d: Second move (%d,%d) invalid, staying at first move (%d,%d)", 
+                                   agent_id_, intended_second_move.first, intended_second_move.second,
+                                   intended_first_move.first, intended_first_move.second);
+                    }
+                } else {
+                    // First move is invalid, stay in current position
+                    updated_state.next_moves.push_back(current_pos);
+                    updated_state.next_moves.push_back(current_pos);
+                    RCLCPP_WARN(rclcpp::get_logger("BigTank"), 
+                               "Agent %d: First move (%d,%d) invalid, staying at current position (%d,%d)", 
+                               agent_id_, intended_first_move.first, intended_first_move.second,
+                               current_pos.first, current_pos.second);
+                }
                 agent_state_db_->setState(agent_id_, updated_state);
             }
         } else {
@@ -209,27 +232,45 @@ void BigTankAlgorithm::check_for_deadlock() {
         // If stuck for too long, take drastic measures
         if (stuck_counter_ > MAX_STUCK_THRESHOLD) {
             std::pair<int, int> next_move = select_any_adjacent_cell();
-            registered_path_.push_back(next_move);
             
-            // Update agent's next_moves for drastic measures - ALWAYS maintain exactly 2 moves
-            AgentState drastic_state = agent_state_db_->getState(agent_id_);
-            drastic_state.next_moves.clear();
-            drastic_state.next_moves.push_back(next_move);
+            // Validate the drastic move
+            std::pair<int, int> current_pos = {agent_state_db_->getState(agent_id_).current_x, 
+                                              agent_state_db_->getState(agent_id_).current_y};
             
-            // Add a second random adjacent move if possible, otherwise duplicate first move
-            std::pair<int, int> second_move = next_move; // Default
-            std::vector<std::pair<int, int>> adjacent = get_adjacent_cells(next_move);
-            for (const auto& adj : adjacent) {
-                if (is_within_bounds(adj) && adj != next_move) {
-                    second_move = adj;
-                    break;
+            if (is_valid_move(current_pos, next_move)) {
+                registered_path_.push_back(next_move);
+                
+                // Update agent's next_moves for drastic measures - ALWAYS maintain exactly 2 moves
+                AgentState drastic_state = agent_state_db_->getState(agent_id_);
+                drastic_state.next_moves.clear();
+                drastic_state.next_moves.push_back(next_move);
+                
+                // Add a second random adjacent move if possible, otherwise duplicate first move
+                std::pair<int, int> second_move = next_move; // Default
+                std::vector<std::pair<int, int>> adjacent = get_adjacent_cells(next_move);
+                for (const auto& adj : adjacent) {
+                    if (is_valid_move(next_move, adj) && adj != next_move) {
+                        second_move = adj;
+                        break;
+                    }
                 }
+                
+                // ALWAYS add exactly 2 moves
+                drastic_state.next_moves.push_back(second_move);
+                
+                agent_state_db_->setState(agent_id_, drastic_state);
+            } else {
+                // Even drastic move is invalid, stay in place
+                AgentState stay_state = agent_state_db_->getState(agent_id_);
+                stay_state.next_moves.clear();
+                stay_state.next_moves.push_back(current_pos);
+                stay_state.next_moves.push_back(current_pos);
+                agent_state_db_->setState(agent_id_, stay_state);
+                
+                RCLCPP_ERROR(rclcpp::get_logger("BigTank"), 
+                            "Agent %d: Even drastic move invalid, staying in place at (%d,%d)", 
+                            agent_id_, current_pos.first, current_pos.second);
             }
-            
-            // ALWAYS add exactly 2 moves
-            drastic_state.next_moves.push_back(second_move);
-            
-            agent_state_db_->setState(agent_id_, drastic_state);
             
             reset_chain_force();
             recovery_.clear();
@@ -272,42 +313,57 @@ void BigTankAlgorithm::force_based_movement(const std::pair<double, double>& for
     // Update agent's next_moves based on force application - ALWAYS maintain exactly 2 moves
     AgentState updated_state = self_state;
     updated_state.next_moves.clear();
-    updated_state.next_moves.push_back(next_move); // First move is the calculated move
     
-    // Calculate second move based on ideal path or goal direction
-    std::pair<int, int> second_move = next_move; // Default to staying at next_move
-    if (!ideal_path_.empty()) {
-        // Find next_move position in ideal path and get the subsequent move
-        for (size_t i = 0; i < ideal_path_.size() - 1; ++i) {
-            if (ideal_path_[i] == next_move && i + 1 < ideal_path_.size()) {
-                second_move = ideal_path_[i + 1];
-                break;
+    // Validate the force-based move
+    std::pair<int, int> current_pos = {self_state.current_x, self_state.current_y};
+    if (is_valid_move(current_pos, next_move)) {
+        updated_state.next_moves.push_back(next_move); // First move is the calculated move
+        
+        // Calculate second move based on ideal path or goal direction
+        std::pair<int, int> second_move = next_move; // Default to staying at next_move
+        if (!ideal_path_.empty()) {
+            // Find next_move position in ideal path and get the subsequent move
+            for (size_t i = 0; i < ideal_path_.size() - 1; ++i) {
+                if (ideal_path_[i] == next_move && i + 1 < ideal_path_.size()) {
+                    second_move = ideal_path_[i + 1];
+                    break;
+                }
+            }
+        } else {
+            // If no ideal path, calculate direction toward goal
+            if (next_move.first != self_state.goal_x || next_move.second != self_state.goal_y) {
+                if (std::abs(self_state.goal_x - next_move.first) > std::abs(self_state.goal_y - next_move.second)) {
+                    second_move = {
+                        next_move.first + (self_state.goal_x - next_move.first > 0 ? 1 : -1),
+                        next_move.second
+                    };
+                } else {
+                    second_move = {
+                        next_move.first,
+                        next_move.second + (self_state.goal_y - next_move.second > 0 ? 1 : -1)
+                    };
+                }
             }
         }
+        
+        // Validate second move and ensure it's within bounds
+        if (!is_valid_move(next_move, second_move)) {
+            second_move = next_move; // Stay at next_move if second move is invalid
+            RCLCPP_DEBUG(rclcpp::get_logger("BigTank"), 
+                        "Agent %d: Second move in force_based_movement invalid, staying at (%d,%d)", 
+                        agent_id_, next_move.first, next_move.second);
+        }
+        
+        // ALWAYS add exactly 2 moves
+        updated_state.next_moves.push_back(second_move);
     } else {
-        // If no ideal path, calculate direction toward goal
-        if (next_move.first != self_state.goal_x || next_move.second != self_state.goal_y) {
-            if (std::abs(self_state.goal_x - next_move.first) > std::abs(self_state.goal_y - next_move.second)) {
-                second_move = {
-                    next_move.first + (self_state.goal_x - next_move.first > 0 ? 1 : -1),
-                    next_move.second
-                };
-            } else {
-                second_move = {
-                    next_move.first,
-                    next_move.second + (self_state.goal_y - next_move.second > 0 ? 1 : -1)
-                };
-            }
-        }
+        // Force-based move is invalid, stay in current position
+        updated_state.next_moves.push_back(current_pos);
+        updated_state.next_moves.push_back(current_pos);
+        RCLCPP_WARN(rclcpp::get_logger("BigTank"), 
+                   "Agent %d: Force-based move to (%d,%d) invalid, staying at current position (%d,%d)", 
+                   agent_id_, next_move.first, next_move.second, current_pos.first, current_pos.second);
     }
-    
-    // Ensure second move is within bounds, otherwise stay at next_move
-    if (!is_within_bounds(second_move)) {
-        second_move = next_move;
-    }
-    
-    // ALWAYS add exactly 2 moves
-    updated_state.next_moves.push_back(second_move);
     
     updated_state.force = force_vector;  // Store the force that was applied
     agent_state_db_->setState(agent_id_, updated_state);
@@ -418,36 +474,53 @@ void BigTankAlgorithm::follow_recovery_path() {
             resolve_conflict(collision_result.other_agent);
             return;
         } else {
-            // No conflict, proceed with recovery
-            collision_ = false;
-            
-            recovery_.pop_back();
-            registered_path_.push_back(intended_next_move);
-            recovery_counter_++;
-            
-            // Update agent's next_moves for recovery - ALWAYS maintain exactly 2 moves
-            AgentState updated_state = self_state;
-            updated_state.next_moves.clear();
-            updated_state.next_moves.push_back(intended_next_move);
-            
-            // Calculate second move from remaining recovery path or ideal path
-            std::pair<int, int> second_move = intended_next_move; // Default
-            if (!recovery_.empty()) {
-                second_move = recovery_.back();
-            } else if (!ideal_path_.empty()) {
-                // Find current position in ideal path and add next step
-                for (size_t i = 0; i < ideal_path_.size() - 1; ++i) {
-                    if (ideal_path_[i] == intended_next_move && i + 1 < ideal_path_.size()) {
-                        second_move = ideal_path_[i + 1];
-                        break;
+            // No conflict, check if the recovery move is valid
+            if (is_valid_move(current_pos, intended_next_move)) {
+                collision_ = false;
+                
+                recovery_.pop_back();
+                registered_path_.push_back(intended_next_move);
+                recovery_counter_++;
+                
+                // Update agent's next_moves for recovery - ALWAYS maintain exactly 2 moves
+                AgentState updated_state = self_state;
+                updated_state.next_moves.clear();
+                updated_state.next_moves.push_back(intended_next_move);
+                
+                // Calculate second move from remaining recovery path or ideal path
+                std::pair<int, int> second_move = intended_next_move; // Default
+                if (!recovery_.empty()) {
+                    second_move = recovery_.back();
+                } else if (!ideal_path_.empty()) {
+                    // Find current position in ideal path and add next step
+                    for (size_t i = 0; i < ideal_path_.size() - 1; ++i) {
+                        if (ideal_path_[i] == intended_next_move && i + 1 < ideal_path_.size()) {
+                            second_move = ideal_path_[i + 1];
+                            break;
+                        }
                     }
                 }
+                
+                // Validate second move
+                if (!is_valid_move(intended_next_move, second_move)) {
+                    second_move = intended_next_move; // Stay at first move if second is invalid
+                    RCLCPP_DEBUG(rclcpp::get_logger("BigTank"), 
+                                "Agent %d: Second recovery move invalid, staying at (%d,%d)", 
+                                agent_id_, intended_next_move.first, intended_next_move.second);
+                }
+                
+                // ALWAYS add exactly 2 moves
+                updated_state.next_moves.push_back(second_move);
+                
+                agent_state_db_->setState(agent_id_, updated_state);
+            } else {
+                // Recovery move is invalid, recalculate path
+                RCLCPP_WARN(rclcpp::get_logger("BigTank"), 
+                           "Agent %d recovery move to (%d,%d) invalid, recalculating path", 
+                           agent_id_, intended_next_move.first, intended_next_move.second);
+                recalculate_ideal_path();
+                return;
             }
-            
-            // ALWAYS add exactly 2 moves
-            updated_state.next_moves.push_back(second_move);
-            
-            agent_state_db_->setState(agent_id_, updated_state);
         }
     }
     
@@ -466,15 +539,41 @@ bool BigTankAlgorithm::is_blocked(const std::pair<int, int>& position) {
         return true;
     }
     
-    // TODO: Check for static obstacles in the map
-    // Access the map at this point
-    const std::vector<std::vector<int>>& map = map_;
-    if (map[position.first][position.second] == 1) {
-        return true; // Blocked by static obstacle
+    // Check for static obstacles in the map
+    // Map is accessed as map[y][x], position is (x, y)
+    if (!map_.empty() && position.second < (int)map_.size() && 
+        position.first < (int)map_[position.second].size()) {
+        if (map_[position.second][position.first] == 1) {
+            return true; // Blocked by static obstacle
+        }
     }
-    // For now, we'll assume no static obstacles
     
     return false;
+}
+
+bool BigTankAlgorithm::is_valid_move(const std::pair<int, int>& from, const std::pair<int, int>& to) {
+    // Check if destination is blocked (out of bounds or obstacle)
+    if (is_blocked(to)) {
+        RCLCPP_DEBUG(rclcpp::get_logger("BigTank"), 
+                    "Agent %d move from (%d,%d) to (%d,%d) invalid: destination blocked", 
+                    agent_id_, from.first, from.second, to.first, to.second);
+        return false;
+    }
+    
+    // Check if move is within allowed Manhattan distance (typically 1 for grid movement)
+    if (!is_move_within_manhattan_distance(from, to, 1)) {
+        RCLCPP_DEBUG(rclcpp::get_logger("BigTank"), 
+                    "Agent %d move from (%d,%d) to (%d,%d) invalid: exceeds Manhattan distance", 
+                    agent_id_, from.first, from.second, to.first, to.second);
+        return false;
+    }
+    
+    return true;
+}
+
+bool BigTankAlgorithm::is_move_within_manhattan_distance(const std::pair<int, int>& from, const std::pair<int, int>& to, int max_distance) {
+    int manhattan_distance = std::abs(to.first - from.first) + std::abs(to.second - from.second);
+    return manhattan_distance <= max_distance;
 }
 
 BigTankAlgorithm::CollisionResult BigTankAlgorithm::is_collision(const std::pair<int, int>& intended_position) {
