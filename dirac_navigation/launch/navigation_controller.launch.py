@@ -21,6 +21,12 @@ def generate_launch_description():
         description='Enable/disable the discrete navigation controller node'
     )
     
+    enable_grid_publisher_arg = DeclareLaunchArgument(
+        'enable_grid_publisher',
+        default_value='true',
+        description='Enable/disable the grid pose publisher node'
+    )
+    
     agent_id_arg = DeclareLaunchArgument(
         'agent_id',
         default_value='1',
@@ -37,10 +43,26 @@ def generate_launch_description():
         description='Path to the navigation configuration file'
     )
     
+    # Grid pose publisher arguments
+    grid_size_arg = DeclareLaunchArgument(
+        'grid_size',
+        default_value='5.0',
+        description='Number of cells in each dimension of the grid'
+    )
+    
+    world_size_arg = DeclareLaunchArgument(
+        'world_size',
+        default_value='11.0',
+        description='Size of the world in meters (turtlesim default)'
+    )
+    
     # Get launch configurations
     enable_controller = LaunchConfiguration('enable_controller')
+    enable_grid_publisher = LaunchConfiguration('enable_grid_publisher')
     agent_id = LaunchConfiguration('agent_id')
     config_file = LaunchConfiguration('config_file')
+    grid_size = LaunchConfiguration('grid_size')
+    world_size = LaunchConfiguration('world_size')
     
     # Discrete navigation controller node with configuration
     navigation_controller_node = Node(
@@ -52,9 +74,26 @@ def generate_launch_description():
         condition=IfCondition(enable_controller)
     )
     
+    # Grid pose publisher node
+    grid_pose_publisher_node = Node(
+        package='dirac_navigation',
+        executable='grid_pose_publisher',
+        name=['grid_pose_publisher_', agent_id],
+        parameters=[{
+            'grid_size': grid_size,
+            'world_size': world_size
+        }],
+        output='screen',
+        condition=IfCondition(enable_grid_publisher)
+    )
+    
     return LaunchDescription([
         enable_controller_arg,
+        enable_grid_publisher_arg,
         agent_id_arg,
         config_file_arg,
-        navigation_controller_node
+        grid_size_arg,
+        world_size_arg,
+        navigation_controller_node,
+        grid_pose_publisher_node
     ])
