@@ -12,6 +12,8 @@ find_package(rosidl_default_generators REQUIRED)
 # Generate message interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AgentCommand.msg"
+  "msg/Election.msg"
+
   DEPENDENCIES
 )
 
