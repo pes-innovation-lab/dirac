@@ -28,9 +28,10 @@ private:
 class Agent : public std::enable_shared_from_this<Agent>
 {
 public:
-    double MAP_SIZE = 30.0; 
-    int ZONES_PER_ROW = 3; 
-    int zone_id;
+    double MAP_SIZE = 30.0;
+    int ZONES_PER_ROW = 3;
+    int zone_id_;
+
     static std::shared_ptr<Agent> create(const rclcpp::Node::SharedPtr& node)
     {
         return std::shared_ptr<Agent>(new Agent(node));
@@ -46,23 +47,40 @@ public:
 
     rclcpp::Node::SharedPtr getNode() const { return node_; }
 
-    // Add this function to calculate zone id
-
-
 private:
     Agent(const rclcpp::Node::SharedPtr& node) : node_(node)
     {
         is_leader_ = node->get_parameter("isLeader").as_bool();
         agent_id_ = node->get_parameter("agent_id").as_int();
-        zone_id_ = node->get_parameter("zone_id").as_int();
         agent_x_ = node->get_parameter("agent_x").as_double();
         agent_y_ = node->get_parameter("agent_y").as_double();
         z_leader = node->get_parameter("z_leader").as_int();
+
+        //  Calculate zone_id dynamically
+        zone_id_ = calculate_zone(agent_x_, agent_y_);
+        if (zone_id_ == -1)
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Agent position is out of map bounds!");
+        }
     }
-    //calculate which zone the agent is in based on its coordinates
+
+    int calculate_zone(double x, double y)
+    {
+        if (x < 0 || x > MAP_SIZE || y < 0 || y > MAP_SIZE)
+        {
+            return -1; // Out of map bounds
+        }
+        double zone_size = MAP_SIZE / ZONES_PER_ROW;
+        int col_index = static_cast<int>(std::floor(x / zone_size));
+        int row_index = static_cast<int>(std::floor(y / zone_size));
+        col_index = std::min(col_index, ZONES_PER_ROW - 1);
+        row_index = std::min(row_index, ZONES_PER_ROW - 1);
+        int zone_number = row_index * ZONES_PER_ROW + col_index + 1;
+        return zone_number;
+    }
 
     rclcpp::Node::SharedPtr node_;
-    int agent_id_, zone_id_;
+    int agent_id_;
     double agent_x_, agent_y_;
     bool is_leader_;
     int z_leader;
