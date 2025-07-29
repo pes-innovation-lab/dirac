@@ -1,0 +1,295 @@
+#include <string>
+#include <fstream>
+#include <functional>
+#include <filesystem>
+#include <thread>
+#include <chrono>
+#include "rclcpp/rclcpp.hpp"
+#include "dirac_msgs/msg/agent_command.hpp"
+#include "dirac_msgs/msg/job_top.hpp"
+#include "ament_index_cpp/get_package_share_directory.hpp"
+#include "bt/file_io.hpp"
+#include "bt/agent_state_db.hpp"
+#include "bt/state_updater.hpp"
+#include "bt/path_planner.hpp"
+#include "bt/big_tank.hpp"
+
+class Agent : public rclcpp::Node {
+public:
+    Agent(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+    : Node("agent", options), job_id_received_(false), zone_pop_received_(false) {
+        this->declare_parameter<int>("agent_id", 1);
+        agent_id_ = this->get_parameter("agent_id").as_int();
+
+        std::string package_share_directory = ament_index_cpp::get_package_share_directory("bt");
+        std::string agents_csv_path = package_share_directory + "/agents.csv";
+        std::string map_csv_path = package_share_directory + "/map.csv";
+
+        RCLCPP_INFO(this->get_logger(), "Looking for map.csv at: %s", map_csv_path.c_str());
+
+        // Remove CSV-based assignment for agent fields, will get from topic
+        map_ = bt::FileIO::read_map_csv(map_csv_path);
+        db_ = std::make_shared<bt::AgentStateDB>();
+
+        // Subscribe to job_top_1 for all agent info
+        job_sub_ = this->create_subscription<dirac_msgs::msg::JobTop>(
+            "job_top_1", 10,
+            [this](const dirac_msgs::msg::JobTop::SharedPtr msg) {
+                agent_id_ = msg->agent_id;
+                start_ = std::make_pair(msg->start_x, msg->start_y);
+                priority_ = msg->priority;
+                job_id_ = msg->job_id;
+                goal_ = std::make_pair(msg->goal_x, msg->goal_y);
+                is_leader_ = msg->is_leader;
+                // Recompute ideal_path with new start/goal
+                ideal_path_ = bt::PathPlanner::astar_path(start_.first, start_.second, goal_.first, goal_.second, map_);
+                job_id_received_ = true;
+                RCLCPP_INFO(this->get_logger(), "Received JobTop for agent %d: job_id=%s, start=(%d,%d), goal=(%d,%d), leader=%s", agent_id_, job_id_.c_str(), start_.first, start_.second, goal_.first, goal_.second, is_leader_ ? "YES" : "NO");
+                try_initialize();
+            }
+        );
+
+        // Subscribe to zone_pop for agent count
+        zone_pop_sub_ = this->create_subscription<std_msgs::msg::Int32>(
+            "zone_pop", 10,
+            [this](const std_msgs::msg::Int32::SharedPtr msg) {
+                total_agents_ = msg->data;
+                zone_pop_received_ = true;
+                RCLCPP_INFO(this->get_logger(), "Received zone_pop (total_agents): %d", total_agents_);
+                try_initialize();
+            }
+        );
+
+        // Initialize command publisher for this agent
+        std::string command_topic = "agent_command_" + std::to_string(agent_id_);
+        command_pub_ = this->create_publisher<dirac_msgs::msg::AgentCommand>(command_topic, 10);
+    }
+
+private:
+    void try_initialize() {
+        if (job_id_received_ && zone_pop_received_ && !initialized_) {
+            initialized_ = true;
+
+            // Initialize agent state in database FIRST
+            initialize_agent_state();
+
+            // Initialize BigTank shared database
+            bt::BigTank::initialize_shared_db(db_);
+
+            // Create StateUpdater AFTER agent state is initialized
+            std::string package_share_directory = ament_index_cpp::get_package_share_directory("bt");
+            std::string agents_csv_path = package_share_directory + "/agents.csv";
+            state_updater_ = std::make_unique<bt::StateUpdater>(this, agent_id_, db_, total_agents_, agents_csv_path);
+
+            // Set up tick change callback
+            state_updater_->set_tick_change_callback([this](int new_tick) {
+                this->on_tick_change(new_tick);
+            });
+
+            RCLCPP_INFO(this->get_logger(), "Agent %d initialized with leadership: %s", 
+                        agent_id_, is_leader_ ? "YES (LEADER)" : "NO");
+
+            // Start with tick 0 - leader will advance when all agents are ready
+            current_tick_ = 0;
+            if (state_updater_->get_current_global_tick() == 0) {
+                RCLCPP_INFO(this->get_logger(), "Agent %d starting initial tick processing", agent_id_);
+                // DO NOT call process_tick() here - wait for tick_change_callback after state synchronization
+                // Instead, just publish initial state to trigger acknowledgment system
+                state_updater_->publish_state_for_tick(current_tick_);
+            }
+
+            RCLCPP_INFO(this->get_logger(), "Agent %d start: (%d,%d), job_id: %s, goal: (%d,%d)", agent_id_, start_.first, start_.second, job_id_.c_str(), goal_.first, goal_.second);
+            RCLCPP_INFO(this->get_logger(), "Loaded map of size %lux%lu", map_.size(), map_.empty() ? 0 : map_[0].size());
+            RCLCPP_INFO(this->get_logger(), "Ideal path length: %lu", ideal_path_.size());
+        }
+    }
+
+private:
+    void initialize_agent_state() {
+        AgentState initial_state;
+        initial_state.agent_id = agent_id_;
+        initial_state.current_x = start_.first;
+        initial_state.current_y = start_.second;
+        initial_state.priority = priority_; // Use priority from CSV
+        initial_state.job_id = job_id_;
+        initial_state.goal_x = goal_.first;
+        initial_state.goal_y = goal_.second;
+        initial_state.is_moving = false;
+        initial_state.is_leader = is_leader_; // Use the value from CSV
+        initial_state.current_tick = 0;
+        initial_state.goal_reached = false;
+        initial_state.force = {0.0, 0.0};
+        initial_state.chain_force = {0.0, 0.0};
+        initial_state.stuck_counter = 0;
+        initial_state.force_multiplier = 1.0;
+        initial_state.timestamp = std::chrono::system_clock::now();
+        
+        // Pre-populate next_moves with exactly 2 moves from ideal path
+        // This is critical for collision detection to work properly
+        initial_state.next_moves.clear();
+        if (!ideal_path_.empty() && ideal_path_.size() >= 2) {
+            std::pair<int, int> first_move = ideal_path_[1]; // Next immediate move
+            std::pair<int, int> second_move = ideal_path_.size() >= 3 ? ideal_path_[2] : first_move;
+            
+            initial_state.next_moves.push_back(first_move);
+            initial_state.next_moves.push_back(second_move);
+            
+            RCLCPP_INFO(this->get_logger(), 
+                       "Agent %d initialized with next_moves: (%d,%d), (%d,%d)", 
+                       agent_id_, 
+                       first_move.first, first_move.second,
+                       second_move.first, second_move.second);
+        } else {
+            // No ideal path, stay at current position
+            std::pair<int, int> current_pos = {start_.first, start_.second};
+            initial_state.next_moves.push_back(current_pos);
+            initial_state.next_moves.push_back(current_pos);
+            
+            RCLCPP_WARN(this->get_logger(), 
+                       "Agent %d has no ideal path, staying at current position (%d,%d)", 
+                       agent_id_, start_.first, start_.second);
+        }
+        
+        db_->setState(agent_id_, initial_state);
+        RCLCPP_INFO(this->get_logger(), "Agent %d state initialized in database", agent_id_);
+    }
+
+    void on_tick_change(int new_tick) {
+        if (new_tick > current_tick_) {
+            current_tick_ = new_tick;
+            process_tick(current_tick_);
+        }
+    }
+
+    void process_tick(int tick) {
+        // Add delay to slow down tick processing for observation
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        AgentState current_state = db_->getState(agent_id_);
+        current_state.current_tick = tick;
+        current_state.timestamp = std::chrono::system_clock::now();
+         
+        // Use BigTank algorithm to calculate next move
+        AgentState new_state = bt::BigTank::calculate_next_move(current_state, ideal_path_, goal_, map_);
+        
+        // Check if BigTank provided a valid next move
+        if (!new_state.next_moves.empty()) {
+            // Execute the move
+            std::pair<int, int> next_pos = new_state.next_moves[0];
+            
+            // Validate the move is within bounds and not blocked
+            if (next_pos.first >= 0 && next_pos.first < (int)map_[0].size() &&
+                next_pos.second >= 0 && next_pos.second < (int)map_.size() &&
+                map_[next_pos.second][next_pos.first] == 0) {
+                
+                // Update position
+                new_state.current_x = next_pos.first;
+                new_state.current_y = next_pos.second;
+                
+                // Set is_moving based on whether the next position is different from current position
+                new_state.is_moving = (next_pos.first != current_state.current_x || next_pos.second != current_state.current_y);
+                
+                // Determine direction and publish command if moving
+                if (new_state.is_moving) {
+                    int direction = 0; // 0 = no movement, 1 = right, 2 = up, 3 = left, 4 = down
+                    int dx = next_pos.first - current_state.current_x;
+                    int dy = next_pos.second - current_state.current_y;
+                    
+                    if (dx > 0) {
+                        direction = 4; // Right
+                    } else if (dy < 0) {
+                        direction = 1; // Up (assuming y decreases going up)
+                    } else if (dx < 0) {
+                        direction = 3; // Left
+                    } else if (dy > 0) {
+                        direction = 2; // Down (assuming y increases going down)
+                    }
+                    
+                    // Publish direction command
+                    dirac_msgs::msg::AgentCommand command_msg;
+                    command_msg.direction = direction;
+                    command_pub_->publish(command_msg);
+                    
+                    RCLCPP_INFO(this->get_logger(), "Agent %d published direction command: %d", agent_id_, direction);
+                }
+                
+                // Log movement
+                if (new_state.is_moving) {
+                    RCLCPP_INFO(this->get_logger(), "Agent %d moved from (%d,%d) to (%d,%d) with force (%.2f,%.2f) at tick %d", 
+                               agent_id_, current_state.current_x, current_state.current_y, 
+                               new_state.current_x, new_state.current_y, 
+                               new_state.force.first, new_state.force.second, tick);
+                } else {
+                    RCLCPP_INFO(this->get_logger(), "Agent %d staying at (%d,%d) with force (%.2f,%.2f) at tick %d", 
+                               agent_id_, new_state.current_x, new_state.current_y, 
+                               new_state.force.first, new_state.force.second, tick);
+                }
+            } else {
+                // Invalid move, stay in place
+                new_state.current_x = current_state.current_x;
+                new_state.current_y = current_state.current_y;
+                new_state.is_moving = false;
+                RCLCPP_WARN(this->get_logger(), "Agent %d attempted invalid move to (%d,%d), staying at (%d,%d) at tick %d", 
+                           agent_id_, next_pos.first, next_pos.second, 
+                           current_state.current_x, current_state.current_y, tick);
+            }
+        } else {
+            // No move calculated, stay in place
+            new_state.current_x = current_state.current_x;
+            new_state.current_y = current_state.current_y;
+            new_state.is_moving = false;
+            RCLCPP_WARN(this->get_logger(), "Agent %d blocked at (%d,%d), cannot move at tick %d", 
+                       agent_id_, current_state.current_x, current_state.current_y, tick);
+        }
+        
+        // Check if goal reached
+        if (new_state.current_x == goal_.first && new_state.current_y == goal_.second) {
+            new_state.goal_reached = true;
+            if (!current_state.goal_reached) {
+                RCLCPP_INFO(this->get_logger(), "Agent %d REACHED GOAL at (%d,%d) at tick %d! Job %s completed.", 
+                           agent_id_, new_state.current_x, new_state.current_y, tick, new_state.job_id.c_str());
+            }
+        }
+        
+        // Update state in database
+        db_->setState(agent_id_, new_state);
+        
+        // Debug logging for Agent 10
+        if (agent_id_ == 10) {
+            RCLCPP_WARN(this->get_logger(), "Agent 10 DEBUG: Updated DB with position: (%d,%d)", 
+                       new_state.current_x, new_state.current_y);
+        }
+        
+        // Trigger distributed coordination by publishing state
+        state_updater_->publish_state_for_tick(tick);
+    }
+
+private:
+    int agent_id_;
+    int current_tick_;
+    bool is_leader_;
+    std::pair<int, int> start_;
+    int priority_;
+    std::string job_id_;
+    std::pair<int, int> goal_;
+    std::vector<std::vector<int>> map_;
+    std::vector<std::pair<int, int>> ideal_path_;
+    std::shared_ptr<bt::AgentStateDB> db_;
+    std::unique_ptr<bt::StateUpdater> state_updater_;
+    rclcpp::Publisher<dirac_msgs::msg::AgentCommand>::SharedPtr command_pub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr job_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr zone_pop_sub_;
+    int total_agents_ = 0;
+    bool job_id_received_ = false;
+    bool zone_pop_received_ = false;
+    bool initialized_ = false;
+};
+
+int main(int argc, char **argv)
+{
+  rclcpp::init(argc, argv);
+  rclcpp::NodeOptions options;
+  auto node = std::make_shared<Agent>(options);
+  rclcpp::spin(node);
+  rclcpp::shutdown();
+  return 0;
+}

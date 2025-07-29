@@ -9,6 +9,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(dirac_lib REQUIRED)
+find_package(dirac_msgs REQUIRED)
+find_package(dirac_pp REQUIRED)
 
 # Include headers
 include_directories(
@@ -23,6 +25,8 @@ add_executable(agent_node
 ament_target_dependencies(agent_node
   rclcpp
   dirac_lib
+  dirac_msgs
+  dirac_pp
 )
 
 # Install executable
