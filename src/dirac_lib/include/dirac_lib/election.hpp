@@ -13,6 +13,10 @@ namespace dirac_lib {
 
 class ElectionManager {
 public:
+    static constexpr double MAP_SIZE = 30.0;
+    static constexpr int ZONES_PER_ROW = 3;
+    int zone_id;
+
     ElectionManager(
         int agent_id,
         int zone_id,
@@ -29,9 +33,6 @@ public:
     int getLeaderId() const;
 
 private:
-    static constexpr double MAP_SIZE = 30.0; 
-    static constexpr int ZONES_PER_ROW = 3;   
-
     int agent_id_;
     int zone_id_;
     double agent_x_;
@@ -60,4 +61,4 @@ private:
     double calculateDistanceToCenter() const;
 };
 
-} 
+}

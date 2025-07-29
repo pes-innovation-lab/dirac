@@ -6,6 +6,10 @@
 
 class ElectionHandler {
 public: 
+    double MAP_SIZE = 30.0; 
+    int ZONES_PER_ROW = 3; 
+    int zone_id;
+    
     ElectionHandler(int agent_id, int zone_id, double agent_x, double agent_y, rclcpp::Node::SharedPtr node)
     {
         election_manager_ = std::make_shared<dirac_lib::ElectionManager>(
@@ -24,6 +28,9 @@ private:
 class Agent : public std::enable_shared_from_this<Agent>
 {
 public:
+    double MAP_SIZE = 30.0; 
+    int ZONES_PER_ROW = 3; 
+    int zone_id;
     static std::shared_ptr<Agent> create(const rclcpp::Node::SharedPtr& node)
     {
         return std::shared_ptr<Agent>(new Agent(node));
@@ -39,6 +46,9 @@ public:
 
     rclcpp::Node::SharedPtr getNode() const { return node_; }
 
+    // Add this function to calculate zone id
+
+
 private:
     Agent(const rclcpp::Node::SharedPtr& node) : node_(node)
     {
@@ -49,6 +59,7 @@ private:
         agent_y_ = node->get_parameter("agent_y").as_double();
         z_leader = node->get_parameter("z_leader").as_int();
     }
+    //calculate which zone the agent is in based on its coordinates
 
     rclcpp::Node::SharedPtr node_;
     int agent_id_, zone_id_;

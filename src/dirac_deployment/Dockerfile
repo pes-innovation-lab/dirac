@@ -41,6 +41,7 @@ RUN cd /ros2_ws && \
 # Set ownership of the workspace to dirac user
 RUN chown -R dirac:dirac /ros2_ws
 
+
 # Source the workspace setup in bashrc for both root and dirac user
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "source /ros2_ws/install/setup.bash" >> ~/.bashrc && \
