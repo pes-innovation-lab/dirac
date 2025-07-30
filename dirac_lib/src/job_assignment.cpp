@@ -1,5 +1,4 @@
 // job_assignment.cpp
-// Implementation of job assignment and routing library for DIRAC
 
 #include "dirac_lib/job_assignment.hpp"
 #include <map>
@@ -11,7 +10,8 @@ namespace dirac_lib {
 
 // Example: Simple zone calculation (customize as needed)
 int determine_zone(double x, double y) {
-  // For demo: 9 zones in a 30x30 grid (3x3) //make this a part of agent class where the zone is determined
+  // For demo: 9 zones in a 30x30 grid (3x3) //make this a part of agent class where the zone is determined // reuse calc for zone from JAEMM for this 
+// need to make the var mapsize and zone per row a global variable among all pkgs 
   if (x < 10 && y < 10) return 1;
   if (x >= 10 && x < 20 && y < 10) return 2;
   if (x >= 20 && y < 10) return 3;
@@ -23,7 +23,8 @@ int determine_zone(double x, double y) {
   return 9;
 }
 
-
+// superleader listening to incoming jobs topic 
+  // the job_publisher node publishes jobs onto incoming jobs 
 JobSuperLeader::JobSuperLeader(const rclcpp::Node::SharedPtr& node) : node_(node) {
   job_sub_ = node_->create_subscription<dirac_msgs::msg::Job>(
     "/incoming_jobs", 20,
@@ -33,7 +34,7 @@ JobSuperLeader::JobSuperLeader(const rclcpp::Node::SharedPtr& node) : node_(node
 void JobSuperLeader::incoming_job_callback(const dirac_msgs::msg::Job::SharedPtr msg) {
   RCLCPP_INFO(node_->get_logger(), "SuperLeader received job %d at (%.2f, %.2f)", msg->job_id, msg->x, msg->y);
   int zone = determine_zone(msg->x, msg->y);
-  RCLCPP_INFO(node_->get_logger(), "SuperLeader determined zone %d for job %d", zone, msg->job_id);
+  //RCLCPP_INFO(node_->get_logger(), "SuperLeader determined zone %d for job %d", zone, msg->job_id);
   if (zone <= 0) {
     RCLCPP_ERROR(node_->get_logger(), "SuperLeader: Invalid zone %d for job %d! Job will not be routed.", zone, msg->job_id);
     return;
@@ -42,9 +43,10 @@ void JobSuperLeader::incoming_job_callback(const dirac_msgs::msg::Job::SharedPtr
   if (zone_publishers_.find(zone) == zone_publishers_.end()) {
     zone_publishers_[zone] = node_->create_publisher<dirac_msgs::msg::Job>(topic, 10);
     RCLCPP_INFO(node_->get_logger(), "SuperLeader created publisher for topic: %s", topic.c_str());
-  } else {
-    RCLCPP_INFO(node_->get_logger(), "SuperLeader reusing publisher for topic: %s", topic.c_str());
-  }
+  } 
+  //else {
+  //   RCLCPP_INFO(node_->get_logger(), "SuperLeader reusing publisher for topic: %s", topic.c_str());
+  // }
   if (!zone_publishers_[zone]) {
     RCLCPP_ERROR(node_->get_logger(), "SuperLeader: Publisher for zone %d (topic %s) is null!", zone, topic.c_str());
     return;
@@ -53,7 +55,7 @@ void JobSuperLeader::incoming_job_callback(const dirac_msgs::msg::Job::SharedPtr
   RCLCPP_INFO(node_->get_logger(), "SuperLeader routed job %d to zone %d on topic %s (job pos: %.2f, %.2f)",
               msg->job_id, zone, topic.c_str(), msg->x, msg->y);
 }
-
+//zone leaders listens to the topic /zone_x/incoming jobs 
 JobZoneLeader::JobZoneLeader(const rclcpp::Node::SharedPtr& node, int zone_id)
   : node_(node), zone_id_(zone_id) {
   std::string incoming_topic = "/zone_" + std::to_string(zone_id_) + "/incoming_jobs";
