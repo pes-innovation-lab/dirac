@@ -15,6 +15,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AgentCommand.msg"
   "msg/Election.msg"
   "msg/LeaderAnnouncement.msg"
+  "msg/Job.msg"
+  "msg/JobBid.msg"
+  "msg/JobCompletion.msg"
 
   DEPENDENCIES
 )

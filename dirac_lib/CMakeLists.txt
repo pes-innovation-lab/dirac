@@ -12,6 +12,7 @@ find_package(rclcpp REQUIRED)
 
 add_library(dirac_lib SHARED
   src/election.cpp
+  src/job_assignment.cpp
 )
 
 target_include_directories(dirac_lib PUBLIC

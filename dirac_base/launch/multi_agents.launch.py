@@ -8,14 +8,14 @@ def generate_launch_description():
             executable='agent_node',
             name='agent_1',
             output='screen',
-            parameters=[{'agent_id': 1, 'zone_id': 1, 'agent_x': 10.0, 'agent_y': 20.0}]
+            parameters=[{'agent_id': 1, 'zone_id': 1, 'agent_x': 1.0, 'agent_y': 1.0}]
         ),
         Node(
             package='dirac_base',
             executable='agent_node',
             name='agent_2',
             output='screen',
-            parameters=[{'agent_id': 2, 'zone_id': 1, 'agent_x': 12.0, 'agent_y': 22.0}]
+            parameters=[{'agent_id': 2, 'zone_id': 1, 'agent_x': 5.0, 'agent_y': 15.0}]
         ),
         Node(
             package='dirac_base',

@@ -1,7 +1,9 @@
 #include <rclcpp/rclcpp.hpp>
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "dirac_lib/election.hpp"
+#include "dirac_lib/job_assignment.hpp"
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<rclcpp::Node>("agent_node");
@@ -20,8 +22,36 @@ int main(int argc, char ** argv)
   int zone_id = node->get_parameter("zone_id").as_int();
   double agent_x = node->get_parameter("agent_x").as_double();
   double agent_y = node->get_parameter("agent_y").as_double();
+  bool is_leader = node->get_parameter("isLeader").as_bool();
+  int z_leader = node->get_parameter("z_leader").as_int();
+
+
+  // Dynamic role switching
+  std::shared_ptr<void> job_role;
+  auto assign_role = [&](bool is_leader_now)
+  {
+    // Add a short delay to ensure election and parameter updates propagate
+    rclcpp::sleep_for(std::chrono::seconds(3));
+    if (agent_id == 1)
+    {
+      job_role = std::make_shared<dirac_lib::JobSuperLeader>(node);
+      RCLCPP_INFO(node->get_logger(), "Agent %d acting as Super Leader", agent_id);
+    }
+    else if (is_leader_now)
+    {
+      job_role = std::make_shared<dirac_lib::JobZoneLeader>(node, zone_id);
+      RCLCPP_INFO(node->get_logger(), "Agent %d acting as Zone Leader for zone %d", agent_id, zone_id);
+    }
+    else
+    {
+      job_role = std::make_shared<dirac_lib::JobAgent>(node, agent_id, zone_id);
+      RCLCPP_INFO(node->get_logger(), "Agent %d acting as Regular Agent in zone %d", agent_id, zone_id);
+    }
+  };
 
   dirac_lib::ElectionManager election_manager(agent_id, zone_id, agent_x, agent_y, node);
+  // Set post-election callback for role assignment
+  election_manager.post_election_callback_ = assign_role;
 
   rclcpp::spin(node);
   rclcpp::shutdown();

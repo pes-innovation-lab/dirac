@@ -1,4 +1,6 @@
 #pragma once
+
+
 #include <string>
 #include <unordered_map>
 #include <mutex>
@@ -20,6 +22,9 @@ public:
         double agent_y,
         rclcpp::Node::SharedPtr node);
 
+    // Callback to run after election result (e.g., for role assignment)
+    std::function<void(bool)> post_election_callback_;
+
     void startElection();
     void handleElectionMessage(int sender_id, double sender_distance, bool re_election);
     void checkElectionResult();
@@ -29,8 +34,9 @@ public:
     int getLeaderId() const;
 
 private:
-    static constexpr double MAP_SIZE = 30.0; 
-    static constexpr int ZONES_PER_ROW = 3;   
+    // Constants for zone calculation
+    static constexpr double MAP_SIZE = 30.0; // Example value, can be parameterized
+    static constexpr int ZONES_PER_ROW = 3;   // Example value, can be parameterized
 
     int agent_id_;
     int zone_id_;
@@ -56,8 +62,9 @@ private:
     void publishElectionInfo();
     void onElectionMsg(const dirac_msgs::msg::Election::SharedPtr msg);
 
+    // Helper to calculate zone center and distance
     void calculateZoneCenter(double& cx, double& cy) const;
     double calculateDistanceToCenter() const;
 };
 
-} 
+} // namespace dirac_lib

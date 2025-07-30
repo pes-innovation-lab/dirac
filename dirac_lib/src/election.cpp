@@ -27,19 +27,22 @@ ElectionManager::ElectionManager(
         topic, 10,
         std::bind(&ElectionManager::onElectionMsg, this, std::placeholders::_1));
 
+    // Dedicated leader announcement topic
     std::string leader_topic = "/zone_" + std::to_string(zone_id_) + "/leader_announcement";
     leader_announcement_pub_ = node_->create_publisher<dirac_msgs::msg::LeaderAnnouncement>(leader_topic, 10);
 
+    // Publish election info every second until election is done
     publish_timer_ = node_->create_wall_timer(1s, [this]() {
         if (!stop_publishing_) this->publishElectionInfo();
     });
-    result_timer_ = node_->create_wall_timer(5s, [this]() { this->checkElectionResult(); });
+    // Check election result after 15s
+    result_timer_ = node_->create_wall_timer(10s, [this]() { this->checkElectionResult(); });
 
     RCLCPP_INFO(node_->get_logger(), "ElectionManager for ID %d in zone %d, distance to center: %.2f", agent_id_, zone_id_, distance_to_center_);
 }
 
 void ElectionManager::startElection() {
-    // TODO: Implement election logic while scaling up and for reelection 
+    // Not used in this simple demo, handled by timer
 }
 
 void ElectionManager::handleElectionMessage(int sender_id, double sender_distance, bool re_election) {
@@ -58,28 +61,50 @@ void ElectionManager::handleElectionMessage(int sender_id, double sender_distanc
 void ElectionManager::checkElectionResult() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (election_done_) return;
+    // Include self in the map
     received_distances_[agent_id_] = distance_to_center_;
+    // Exclude Super Leader (agent_id == 1) from candidacy
+    std::unordered_map<int, double> candidates;
+    for (const auto& kv : received_distances_) {
+        if (kv.first != 1) {
+            candidates[kv.first] = kv.second;
+        }
+    }
+    if (candidates.empty()) {
+        RCLCPP_WARN(node_->get_logger(), "No eligible zone leader candidates (excluding Super Leader)");
+        return;
+    }
+    // Find the agent with the smallest distance (break ties by agent_id)
     auto leader = std::min_element(
-        received_distances_.begin(), received_distances_.end(),
+        candidates.begin(), candidates.end(),
         [](const auto& a, const auto& b) {
             if (a.second != b.second)
                 return a.second < b.second;
             return a.first < b.first;
         });
-    if (leader != received_distances_.end()) {
+    if (leader != candidates.end()) {
         is_leader_ = (leader->first == agent_id_);
         election_done_ = true;
         stop_publishing_ = true;
         if (publish_timer_) {
             publish_timer_->cancel();
         }
+        // Set parameters on the node
+
         node_->set_parameter(rclcpp::Parameter("isLeader", is_leader_));
         node_->set_parameter(rclcpp::Parameter("z_leader", leader->first));
 
-        dirac_msgs::msg::LeaderAnnouncement leader_msg;
-        leader_msg.zone_id = zone_id_;
-        leader_msg.leader_id = leader->first;
-        leader_announcement_pub_->publish(leader_msg);
+        // Call post-election callback if set
+        if (post_election_callback_) {
+            post_election_callback_(is_leader_);
+        }
+
+        // Publish leader announcement
+       dirac_msgs::msg::LeaderAnnouncement leader_msg;
+       leader_msg.zone_id = zone_id_;
+       leader_msg.leader_id = leader->first;
+       leader_announcement_pub_->publish(leader_msg);
+
 
         RCLCPP_INFO(node_->get_logger(), "[ID %d] Election done! Leader: %d (distance: %.2f)", agent_id_, leader->first, leader->second);
         if (is_leader_) {
@@ -98,6 +123,7 @@ bool ElectionManager::isElectionDone() const {
 
 int ElectionManager::getLeaderId() const {
     std::lock_guard<std::mutex> lock(mutex_);
+    // Find the leader again for reporting
     auto leader = std::min_element(
         received_distances_.begin(), received_distances_.end(),
         [](const auto& a, const auto& b) {
@@ -139,4 +165,4 @@ double ElectionManager::calculateDistanceToCenter() const {
     return std::sqrt((agent_x_ - cx) * (agent_x_ - cx) + (agent_y_ - cy) * (agent_y_ - cy));
 }
 
-}
+} // namespace dirac_lib
