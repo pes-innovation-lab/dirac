@@ -25,9 +25,49 @@ ament_target_dependencies(
   "ament_index_cpp"
 )
 
+# Create path planning handler library
+add_library(path_planning_handler src/path_planning_handler.cpp src/path_planner.cpp src/big_tank.cpp)
+target_include_directories(path_planning_handler PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(path_planning_handler PUBLIC c_std_99 cxx_std_17)
+ament_target_dependencies(
+  path_planning_handler
+  "rclcpp"
+  "std_msgs"
+  "dirac_msgs"
+  "ament_index_cpp"
+)
+
+# Create example agent node using the handler
+add_executable(agent_node src/agent_node.cpp)
+target_include_directories(agent_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(agent_node PUBLIC c_std_99 cxx_std_17)
+target_link_libraries(agent_node path_planning_handler)
+ament_target_dependencies(
+  agent_node
+  "rclcpp"
+  "std_msgs"
+  "dirac_msgs"
+  "ament_index_cpp"
+)
+
 install(TARGETS
   agent
+  agent_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS
+  path_planning_handler
+  DESTINATION lib/${PROJECT_NAME}
+  EXPORT path_planning_handler_targets
+)
+
+install(DIRECTORY include/
+  DESTINATION include/
 )
 
 install(
@@ -40,6 +80,15 @@ install(
 # Install launch files
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch/)
+
+# Export library for use by other packages
+ament_export_targets(path_planning_handler_targets HAS_LIBRARY_TARGET)
+ament_export_dependencies(
+  rclcpp
+  std_msgs
+  dirac_msgs
+  ament_index_cpp
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

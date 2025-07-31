@@ -6,6 +6,7 @@
 #include <chrono>
 #include "rclcpp/rclcpp.hpp"
 #include "dirac_msgs/msg/agent_command.hpp"
+#include "dirac_msgs/msg/job_top.hpp"
 #include "ament_index_cpp/get_package_share_directory.hpp"
 #include "bt/file_io.hpp"
 #include "bt/agent_state_db.hpp"
@@ -16,74 +17,91 @@
 class Agent : public rclcpp::Node {
 public:
     Agent(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-    : Node("agent", options) {
+    : Node("agent", options), job_id_received_(false), zone_pop_received_(false) {
         this->declare_parameter<int>("agent_id", 1);
-        
         agent_id_ = this->get_parameter("agent_id").as_int();
 
         std::string package_share_directory = ament_index_cpp::get_package_share_directory("bt");
         std::string agents_csv_path = package_share_directory + "/agents.csv";
         std::string map_csv_path = package_share_directory + "/map.csv";
 
-        RCLCPP_INFO(this->get_logger(), "Looking for agents.csv at: %s", agents_csv_path.c_str());
         RCLCPP_INFO(this->get_logger(), "Looking for map.csv at: %s", map_csv_path.c_str());
 
-        auto [start, priority, job_id, goal, is_leader] = bt::FileIO::get_agent_info(agents_csv_path, agent_id_);
-        start_ = start;
-        priority_ = priority;
-        job_id_ = job_id;
-        goal_ = goal;
-        is_leader_ = is_leader;
+        // Remove CSV-based assignment for agent fields, will get from topic
         map_ = bt::FileIO::read_map_csv(map_csv_path);
-        ideal_path_ = bt::PathPlanner::astar_path(start_.first, start_.second, goal_.first, goal_.second, map_);
         db_ = std::make_shared<bt::AgentStateDB>();
 
-        // Count total agents from agents.csv
-        int total_agents = 0;
-        {
-            std::ifstream infile(agents_csv_path);
-            std::string line;
-            // Skip header
-            std::getline(infile, line);
-            while (std::getline(infile, line)) {
-                if (!line.empty()) ++total_agents;
+        // Subscribe to job_top_1 for all agent info
+        job_sub_ = this->create_subscription<dirac_msgs::msg::JobTop>(
+            "job_top_1", 10,
+            [this](const dirac_msgs::msg::JobTop::SharedPtr msg) {
+                agent_id_ = msg->agent_id;
+                start_ = std::make_pair(msg->start_x, msg->start_y);
+                priority_ = msg->priority;
+                job_id_ = msg->job_id;
+                goal_ = std::make_pair(msg->goal_x, msg->goal_y);
+                is_leader_ = msg->is_leader;
+                // Recompute ideal_path with new start/goal
+                ideal_path_ = bt::PathPlanner::astar_path(start_.first, start_.second, goal_.first, goal_.second, map_);
+                job_id_received_ = true;
+                RCLCPP_INFO(this->get_logger(), "Received JobTop for agent %d: job_id=%s, start=(%d,%d), goal=(%d,%d), leader=%s", agent_id_, job_id_.c_str(), start_.first, start_.second, goal_.first, goal_.second, is_leader_ ? "YES" : "NO");
+                try_initialize();
             }
-        }
-        
-        // Initialize agent state in database FIRST
-        initialize_agent_state();
+        );
 
-        // Initialize BigTank shared database
-        bt::BigTank::initialize_shared_db(db_);
-
-        // Create StateUpdater AFTER agent state is initialized
-        state_updater_ = std::make_unique<bt::StateUpdater>(this, agent_id_, db_, total_agents, agents_csv_path);
+        // Subscribe to zone_pop for agent count
+        zone_pop_sub_ = this->create_subscription<std_msgs::msg::Int32>(
+            "zone_pop", 10,
+            [this](const std_msgs::msg::Int32::SharedPtr msg) {
+                total_agents_ = msg->data;
+                zone_pop_received_ = true;
+                RCLCPP_INFO(this->get_logger(), "Received zone_pop (total_agents): %d", total_agents_);
+                try_initialize();
+            }
+        );
 
         // Initialize command publisher for this agent
         std::string command_topic = "agent_command_" + std::to_string(agent_id_);
         command_pub_ = this->create_publisher<dirac_msgs::msg::AgentCommand>(command_topic, 10);
+    }
 
-        // Set up tick change callback
-        state_updater_->set_tick_change_callback([this](int new_tick) {
-            this->on_tick_change(new_tick);
-        });
+private:
+    void try_initialize() {
+        if (job_id_received_ && zone_pop_received_ && !initialized_) {
+            initialized_ = true;
 
-        RCLCPP_INFO(this->get_logger(), "Agent %d initialized with leadership: %s", 
-                    agent_id_, is_leader_ ? "YES (LEADER)" : "NO");
+            // Initialize agent state in database FIRST
+            initialize_agent_state();
 
-        // Start with tick 0 - leader will advance when all agents are ready
-        current_tick_ = 0;
-        if (state_updater_->get_current_global_tick() == 0) {
-            RCLCPP_INFO(this->get_logger(), "Agent %d starting initial tick processing", agent_id_);
-            
-            // DO NOT call process_tick() here - wait for tick_change_callback after state synchronization
-            // Instead, just publish initial state to trigger acknowledgment system
-            state_updater_->publish_state_for_tick(current_tick_);
+            // Initialize BigTank shared database
+            bt::BigTank::initialize_shared_db(db_);
+
+            // Create StateUpdater AFTER agent state is initialized
+            std::string package_share_directory = ament_index_cpp::get_package_share_directory("bt");
+            std::string agents_csv_path = package_share_directory + "/agents.csv";
+            state_updater_ = std::make_unique<bt::StateUpdater>(this, agent_id_, db_, total_agents_, agents_csv_path);
+
+            // Set up tick change callback
+            state_updater_->set_tick_change_callback([this](int new_tick) {
+                this->on_tick_change(new_tick);
+            });
+
+            RCLCPP_INFO(this->get_logger(), "Agent %d initialized with leadership: %s", 
+                        agent_id_, is_leader_ ? "YES (LEADER)" : "NO");
+
+            // Start with tick 0 - leader will advance when all agents are ready
+            current_tick_ = 0;
+            if (state_updater_->get_current_global_tick() == 0) {
+                RCLCPP_INFO(this->get_logger(), "Agent %d starting initial tick processing", agent_id_);
+                // DO NOT call process_tick() here - wait for tick_change_callback after state synchronization
+                // Instead, just publish initial state to trigger acknowledgment system
+                state_updater_->publish_state_for_tick(current_tick_);
+            }
+
+            RCLCPP_INFO(this->get_logger(), "Agent %d start: (%d,%d), job_id: %s, goal: (%d,%d)", agent_id_, start_.first, start_.second, job_id_.c_str(), goal_.first, goal_.second);
+            RCLCPP_INFO(this->get_logger(), "Loaded map of size %lux%lu", map_.size(), map_.empty() ? 0 : map_[0].size());
+            RCLCPP_INFO(this->get_logger(), "Ideal path length: %lu", ideal_path_.size());
         }
-
-        RCLCPP_INFO(this->get_logger(), "Agent %d start: (%d,%d), job_id: %s, goal: (%d,%d)", agent_id_, start_.first, start_.second, job_id_.c_str(), goal_.first, goal_.second);
-        RCLCPP_INFO(this->get_logger(), "Loaded map of size %lux%lu", map_.size(), map_.empty() ? 0 : map_[0].size());
-        RCLCPP_INFO(this->get_logger(), "Ideal path length: %lu", ideal_path_.size());
     }
 
 private:
@@ -258,6 +276,12 @@ private:
     std::shared_ptr<bt::AgentStateDB> db_;
     std::unique_ptr<bt::StateUpdater> state_updater_;
     rclcpp::Publisher<dirac_msgs::msg::AgentCommand>::SharedPtr command_pub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr job_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr zone_pop_sub_;
+    int total_agents_ = 0;
+    bool job_id_received_ = false;
+    bool zone_pop_received_ = false;
+    bool initialized_ = false;
 };
 
 int main(int argc, char **argv)

@@ -12,7 +12,8 @@ find_package(rosidl_default_generators REQUIRED)
 # Generate message interfaces
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AgentCommand.msg"
-  DEPENDENCIES
+  "msg/JobTop.msg"
+  DEPENDENCIES builtin_interfaces
 )
 
 if(BUILD_TESTING)

@@ -629,7 +629,6 @@ BigTankAlgorithm::CollisionResult BigTankAlgorithm::is_collision(const std::pair
     }
     
     return result; // No collision detected
-}
 
 std::pair<int, int> BigTankAlgorithm::select_any_adjacent_cell() {
     AgentState self_state = agent_state_db_->getState(agent_id_);
